@@ -312,7 +312,7 @@ async function reload(){ await loadData(); render(); }
 function tabsFor(rol){
   if(rol==='vendedor')    return [['visitas','Mi Día'],['plan','Mi Plan'],['auditorias','Auditorías'],['reactivacion','Inactivos'],['clientes','Mi Cartera'],['prospectos','Prospectos'],['buscados','Más Buscados']];
   if(rol==='coordinador') return [['visitas','Mi Día'],['tablero','Tablero'],['plan','Plan'],['auditorias','Auditorías'],['reactivacion','Inactivos'],['clientes','Clientes'],['cotizaciones','Cotizaciones'],['prospectos','Prospectos'],['buscados','Más Buscados'],['cortes','Cortes']];
-  if(rol==='admin')       return [['cotizaciones','Cotizaciones'],['compras','Compras'],['reactivacion','Inactivos'],['clientes','Clientes'],['catalogos','Catálogos'],['config','Umbrales'],['usuarios','Usuarios']];
+  if(rol==='admin')       return [['consolidado','Consolidado'],['cotizaciones','Cotizaciones'],['compras','Compras'],['reactivacion','Inactivos'],['clientes','Clientes'],['catalogos','Catálogos'],['config','Umbrales'],['usuarios','Usuarios']];
   return [['consolidado','Consolidado'],['cotizaciones','Cotizaciones'],['objetivos','Objetivos'],['clientes','Clientes'],['cortes','Cortes'],['buscados','Más Buscados']]; // direccion
 }
 
@@ -360,13 +360,17 @@ function viewVisitas(){
   const planMes=STATE.planMensual.filter(p=>p.vendedor_id===uid && String(p.mes).slice(0,7)===ym).reduce((a,p)=>a+p.cantidad,0);
   const cumpl = planMes ? Math.round(delMes.length/planMes*100) : 0;
 
-  // plan semanal de esta semana
-  const lun=lunesDe(hoy);
+  // plan semanal + visitas realizadas de esta semana
+  const lun=lunesDe(hoy), dom=addDays(lun,6);
   const semana=STATE.planSemanal.filter(p=>p.vendedor_id===uid && String(p.semana_inicio).slice(0,10)===lun)
                 .sort((a,b)=>String(a.fecha_planeada).localeCompare(String(b.fecha_planeada)));
+  const delSemana=STATE.visitas.filter(v=>v.vendedor_id===uid && v.realizada && v.fecha>=lun && v.fecha<=dom);
+  const semXcli={};
+  delSemana.forEach(v=>{ semXcli[v.cliente_id]=(semXcli[v.cliente_id]||0)+1; });
 
   let h=`<div class="stats">
     <div class="stat"><div class="k">Visitas hoy</div><div class="v">${delDia.length}</div><div class="s">${realiz} realizadas</div></div>
+    <div class="stat"><div class="k">Visitas semana</div><div class="v">${delSemana.length}</div><div class="s">${fmtDM(lun)} al ${fmtDM(dom)}</div></div>
     <div class="stat"><div class="k">Realizadas ${ymLabel(ym)}</div><div class="v">${delMes.length}</div><div class="s">de ${planMes||0} planeadas</div></div>
     <div class="stat"><div class="k">Cumplimiento plan</div><div class="v" style="color:${cumpl>=90?'var(--ok)':cumpl>=70?'var(--warn)':'var(--bad)'}">${cumpl}%</div><div class="s">del mes</div></div>
     <div class="stat"><div class="k">Mi cartera</div><div class="v">${misClientes(uid).length}</div><div class="s">clientes activos</div></div>
@@ -388,6 +392,16 @@ function viewVisitas(){
       <div class="meta">${fmtFecha(p.fecha_planeada)} · ${t?`<span class="badge ${t.letra}">${esc(t.nombre)}</span>`:''}</div></div>
       ${hecha?'<span class="badge est-activo">Realizada</span>':`<button class="act ghost sm" data-act="cerrarPlan" data-id="${p.id}">Registrar</button>`}</div>`;
   }).join('');
+  h+=`</div></div>`;
+
+  // visitas realizadas de la semana, por cliente + total general
+  h+=`<div class="card"><div class="chead"><div class="t"><small>Semana del ${fmtFecha(lun)} al ${fmtFecha(dom)}</small>Visitas de la semana por cliente</div>
+      <span class="badge est-activo" style="font-size:12px">Total: ${delSemana.length}</span></div><div class="cbody">`;
+  const cliKeys=Object.keys(semXcli).sort((a,b)=>semXcli[b]-semXcli[a]);
+  if(!cliKeys.length) h+=`<div class="empty">Sin visitas realizadas esta semana.</div>`;
+  else h+=cliKeys.map(cid=>{ const c=clienteById(Number(cid));
+    return `<div class="trow"><div class="body"><div class="ti">${esc(c?c.nombre_comercial:'#'+cid)}</div></div>
+      <span class="badge marca" style="font-size:12px">${semXcli[cid]} ${semXcli[cid]==1?'visita':'visitas'}</span></div>`; }).join('');
   h+=`</div></div>`;
   return h;
 }
@@ -596,14 +610,16 @@ function viewTablero(){
     <div class="stat"><div class="k">Más buscados</div><div class="v">${STATE.gruposDet.length}</div><div class="s">objetivos activos</div></div>
   </div>`;
 
-  h+=`<div class="card"><div class="chead"><div class="t"><small>${ymLabel(ym)}</small>Cumplimiento por vendedor</div></div>
-    <div class="tblwrap"><table class="grid"><thead><tr><th>Vendedor</th><th>Cartera</th><th>Plan mes</th><th>Realizadas</th><th>Cumplimiento</th></tr></thead><tbody>`;
+  const lunT=lunesDe(hoyStr()), domT=addDays(lunT,6);
+  h+=`<div class="card"><div class="chead"><div class="t"><small>${ymLabel(ym)} · semana ${fmtDM(lunT)}–${fmtDM(domT)}</small>Cumplimiento por vendedor</div></div>
+    <div class="tblwrap"><table class="grid"><thead><tr><th>Vendedor</th><th>Cartera</th><th>Plan mes</th><th>Semana</th><th>Realizadas mes</th><th>Cumplimiento</th></tr></thead><tbody>`;
   h+=vends.map(v=>{
     const cart=STATE.clientes.filter(c=>c.vendedor_id===v.id && c.estatus!=='inactivo').length;
     const plan=STATE.planMensual.filter(p=>p.vendedor_id===v.id && String(p.mes).slice(0,7)===ym).reduce((a,p)=>a+p.cantidad,0);
     const real=STATE.visitas.filter(x=>x.vendedor_id===v.id && x.realizada && x.fecha>=ini && x.fecha<=finStr).length;
+    const sem=STATE.visitas.filter(x=>x.vendedor_id===v.id && x.realizada && x.fecha>=lunT && x.fecha<=domT).length;
     const pct=plan?Math.round(real/plan*100):0;
-    return `<tr><td><span class="nm">${esc(v.nombre)}</span></td><td>${cart}</td><td>${plan}</td><td>${real}</td>
+    return `<tr><td><span class="nm">${esc(v.nombre)}</span></td><td>${cart}</td><td>${plan}</td><td><b>${sem}</b></td><td>${real}</td>
       <td class="pct" style="color:${pct>=90?'var(--ok)':pct>=70?'var(--warn)':'var(--bad)'}">${plan?pct+'%':'—'}</td></tr>`;
   }).join('');
   h+=`</tbody></table></div></div>`;
@@ -758,22 +774,26 @@ function viewConsolidado(){
   const finStr=fin.getFullYear()+'-'+String(fin.getMonth()+1).padStart(2,'0')+'-'+String(fin.getDate()).padStart(2,'0');
   const comprasMes=STATE.compras.filter(c=>String(c.mes).slice(0,10)===ini);
   const totalCompra=comprasMes.reduce((a,c)=>a+Number(c.monto||0),0);
+  const lunC=lunesDe(hoyStr()), domC=addDays(lunC,6);
+  const visSemanaTot=STATE.visitas.filter(v=>v.realizada && v.fecha>=lunC && v.fecha<=domC).length;
 
   let h=`<div class="stats">
     <div class="stat"><div class="k">Cartera total</div><div class="v">${STATE.clientes.length}</div><div class="s">${STATE.clientes.filter(c=>c.estatus==='activo').length} activos · ${STATE.clientes.filter(c=>c.estatus==='mostrador').length} mostrador</div></div>
-    <div class="stat"><div class="k">Visitas ${ymLabel(ym)}</div><div class="v">${STATE.visitas.filter(v=>v.fecha>=ini&&v.fecha<=finStr&&v.realizada).length}</div><div class="s">realizadas</div></div>
+    <div class="stat"><div class="k">Visitas semana</div><div class="v">${visSemanaTot}</div><div class="s">${fmtDM(lunC)} al ${fmtDM(domC)}</div></div>
+    <div class="stat"><div class="k">Visitas ${ymLabel(ym)}</div><div class="v">${STATE.visitas.filter(v=>v.fecha>=ini&&v.fecha<=finStr&&v.realizada).length}</div><div class="s">realizadas en el mes</div></div>
     <div class="stat"><div class="k">Compra del mes</div><div class="v" style="font-size:26px">${money(totalCompra)}</div><div class="s">${comprasMes.filter(c=>c.compro).length} clientes compraron</div></div>
     <div class="stat"><div class="k">Prospectos</div><div class="v">${STATE.prospectos.filter(p=>p.activo).length}</div><div class="s">en pipeline</div></div>
   </div>`;
 
-  h+=`<div class="card"><div class="chead"><div class="t"><small>${ymLabel(ym)}</small>Resumen por vendedor</div></div>
-    <div class="tblwrap"><table class="grid"><thead><tr><th>Vendedor</th><th>Cartera</th><th>Visitas</th><th>Compra mes</th><th>Prospectos</th></tr></thead><tbody>`;
+  h+=`<div class="card"><div class="chead"><div class="t"><small>${ymLabel(ym)} · semana ${fmtDM(lunC)}–${fmtDM(domC)}</small>Resumen por vendedor</div></div>
+    <div class="tblwrap"><table class="grid"><thead><tr><th>Vendedor</th><th>Cartera</th><th>Visitas semana</th><th>Visitas mes</th><th>Compra mes</th><th>Prospectos</th></tr></thead><tbody>`;
   h+=vendedores().map(v=>{
     const cart=STATE.clientes.filter(c=>c.vendedor_id===v.id && c.estatus!=='inactivo').length;
     const vis=STATE.visitas.filter(x=>x.vendedor_id===v.id && x.realizada && x.fecha>=ini && x.fecha<=finStr).length;
+    const vsem=STATE.visitas.filter(x=>x.vendedor_id===v.id && x.realizada && x.fecha>=lunC && x.fecha<=domC).length;
     const compra=comprasMes.filter(c=>{ const cl=clienteById(c.cliente_id); return cl&&cl.vendedor_id===v.id; }).reduce((a,c)=>a+Number(c.monto||0),0);
     const pros=STATE.prospectos.filter(p=>p.activo && p.vendedor_id===v.id).length;
-    return `<tr><td><span class="nm">${esc(v.nombre)}</span></td><td>${cart}</td><td>${vis}</td><td>${money(compra)}</td><td>${pros}</td></tr>`;
+    return `<tr><td><span class="nm">${esc(v.nombre)}</span></td><td>${cart}</td><td><b>${vsem}</b></td><td>${vis}</td><td>${money(compra)}</td><td>${pros}</td></tr>`;
   }).join('');
   h+=`</tbody></table></div></div>`;
   return h;
