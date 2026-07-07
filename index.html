@@ -1005,6 +1005,9 @@ ul{margin:2px 0 8px 20px;font-size:12.5px}
 li{margin:2px 0}
 .rmut{color:#6b6457}
 .rempty{color:#6b6457;font-style:italic;font-size:12px;margin:4px 0}
+.rmini th,.rmini td{padding:4px 5px;font-size:11px}
+.rmini th{text-align:center;vertical-align:bottom}
+.rcat{font-size:12.5px;margin:2px 0 8px}
 @media print{ body{padding:6px} h2{page-break-after:avoid} table,ul{page-break-inside:avoid} }
 `;
 function openPrint(title, body){
@@ -1013,21 +1016,36 @@ function openPrint(title, body){
   w.document.write('<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"><title>'+title+'</title><style>'+REPORT_CSS+'</style></head><body>'+body+'<scr'+'ipt>window.onload=function(){setTimeout(function(){window.print();},350);};<\/scr'+'ipt></body></html>');
   w.document.close();
 }
+function catNombre(id){ const t=tipoById(id); return t?t.nombre:'Sin tipo'; }
+function catResumen(vis){ const m={}; vis.forEach(x=>{ const n=catNombre(x.tipo_visita_id); m[n]=(m[n]||0)+1; });
+  return Object.keys(m).map(k=>`${esc(k)}: <b>${m[k]}</b>`).join(' · ')||'—'; }
+
 function buildReportSemanal(){
   const lun=lunesDe(hoyStr()), dom=addDays(lun,6);
+  const nom=['Lun','Mar','Mié','Jue','Vie','Sáb','Dom'];
+  const dias=[]; for(let i=0;i<7;i++){ const f=addDays(lun,i); dias.push({f, lbl:nom[i], dm:fmtDM(f)}); }
   let body=`<div class="rhead"><div class="rbrand">Recouromex · Gestión Comercial</div><h1>Reporte semanal de visitas</h1>
     <div class="rsub">Semana ${fmtFecha(lun)} al ${fmtFecha(dom)} · generado ${fmtFecha(hoyStr())}</div></div>`;
-  let gran=0;
+  let gran=0; const catG={};
   vendedores().forEach(v=>{
     const vis=STATE.visitas.filter(x=>x.vendedor_id===v.id && x.realizada && x.fecha>=lun && x.fecha<=dom);
-    const porCli={}; vis.forEach(x=>{ porCli[x.cliente_id]=(porCli[x.cliente_id]||0)+1; });
-    const keys=Object.keys(porCli).sort((a,b)=>porCli[b]-porCli[a]);
     gran+=vis.length;
     body+=`<h2>${esc(v.nombre)} <span class="rtot">${vis.length} visita(s)</span></h2>`;
-    if(!keys.length) body+=`<p class="rempty">Sin visitas esta semana.</p>`;
-    else body+=`<table><thead><tr><th>Cliente</th><th class="rnum">Visitas</th></tr></thead><tbody>${keys.map(cid=>{const c=clienteById(Number(cid));return `<tr><td>${esc(c?c.nombre_comercial:'#'+cid)}</td><td class="rnum">${porCli[cid]}</td></tr>`;}).join('')}<tr class="rtr"><td>Total ${esc(v.nombre)}</td><td class="rnum">${vis.length}</td></tr></tbody></table>`;
+    if(!vis.length){ body+=`<p class="rempty">Sin visitas esta semana.</p>`; return; }
+    const rowsMap={};
+    vis.forEach(x=>{ const k=x.cliente_id+'|'+(x.tipo_visita_id||0);
+      if(!rowsMap[k]) rowsMap[k]={cli:x.cliente_id,tipo:x.tipo_visita_id,d:{},total:0};
+      rowsMap[k].d[x.fecha]=(rowsMap[k].d[x.fecha]||0)+1; rowsMap[k].total++; });
+    const rows=Object.values(rowsMap).sort((a,b)=>{ const ca=clienteById(a.cli),cb=clienteById(b.cli); return (ca?ca.nombre_comercial:'').localeCompare(cb?cb.nombre_comercial:''); });
+    const dTot={};
+    body+=`<table class="rmini"><thead><tr><th style="text-align:left">Cliente</th><th>Cat.</th>${dias.map(d=>`<th>${d.lbl}<br>${d.dm}</th>`).join('')}<th>Total</th></tr></thead><tbody>`;
+    body+=rows.map(r=>{ const c=clienteById(r.cli), t=tipoById(r.tipo);
+      return `<tr><td>${esc(c?c.nombre_comercial:'#'+r.cli)}</td><td class="rnum">${t?esc(t.letra):'—'}</td>${dias.map(d=>{const n=r.d[d.f]||0; dTot[d.f]=(dTot[d.f]||0)+n; return `<td class="rnum">${n||''}</td>`;}).join('')}<td class="rnum"><b>${r.total}</b></td></tr>`; }).join('');
+    body+=`<tr class="rtr"><td>Total día</td><td></td>${dias.map(d=>`<td class="rnum">${dTot[d.f]||0}</td>`).join('')}<td class="rnum">${vis.length}</td></tr></tbody></table>`;
+    vis.forEach(x=>{ const n=catNombre(x.tipo_visita_id); catG[n]=(catG[n]||0)+1; });
+    body+=`<div class="rlab">Por categoría — ${esc(v.nombre)}</div><p class="rcat">${catResumen(vis)}</p>`;
   });
-  body+=`<div class="rgrand">Total general de la semana: <b>${gran}</b> visita(s)</div>`;
+  body+=`<div class="rgrand">Total general de la semana: <b>${gran}</b> visita(s)<br><span style="font-size:12.5px;font-family:Arial">Acumulado por categoría — ${Object.keys(catG).map(k=>esc(k)+': '+catG[k]).join(' · ')||'—'}</span></div>`;
   return body;
 }
 function buildReportMensual(){
@@ -1036,27 +1054,37 @@ function buildReportMensual(){
   const finStr=fin.getFullYear()+'-'+String(fin.getMonth()+1).padStart(2,'0')+'-'+String(fin.getDate()).padStart(2,'0');
   let body=`<div class="rhead"><div class="rbrand">Recouromex · Gestión Comercial</div><h1>Reporte mensual — ${ymLabel(ym)}</h1>
     <div class="rsub">Generado ${fmtFecha(hoyStr())}</div></div>`;
+  let mesTot=0; const catGM={};
   vendedores().forEach(v=>{
     const plan=STATE.planMensual.filter(p=>p.vendedor_id===v.id && String(p.mes).slice(0,7)===ym).reduce((a,p)=>a+p.cantidad,0);
-    const real=STATE.visitas.filter(x=>x.vendedor_id===v.id && x.realizada && x.fecha>=ini && x.fecha<=finStr).length;
+    const vis=STATE.visitas.filter(x=>x.vendedor_id===v.id && x.realizada && x.fecha>=ini && x.fecha<=finStr);
+    const real=vis.length;
     const pct=plan?Math.round(real/plan*100):0;
     const pros=STATE.prospectos.filter(p=>p.activo && p.vendedor_id===v.id);
     const auds=STATE.planAud.filter(a=>a.vendedor_id===v.id && String(a.mes).slice(0,7)===ym);
     const audReal=auds.filter(a=>a.estatus==='realizada').length;
     const cot=STATE.cotiz.filter(c=>c.vendedor_id===v.id && String(c.mes).slice(0,10)===ini);
     const ventaTot=STATE.compras.filter(c=>String(c.mes).slice(0,10)===ini && (clienteById(c.cliente_id)||{}).vendedor_id===v.id).reduce((a,c)=>a+Number(c.monto||0),0);
-    body+=`<h2>${esc(v.nombre)}</h2>`;
+    mesTot+=vis.length;
+    body+=`<h2>${esc(v.nombre)} <span class="rtot">${vis.length} visita(s) en el mes</span></h2>`;
     body+=`<table><tbody>
+      <tr><td>Total de visitas del mes</td><td class="rnum"><b>${vis.length}</b></td></tr>
       <tr><td>Cumplimiento al plan</td><td class="rnum">${real} de ${plan||0}${plan?' · '+pct+'%':''}</td></tr>
       <tr><td>Auditorías técnicas</td><td class="rnum">${auds.length} planeadas · ${audReal} realizadas</td></tr>
       <tr><td>Prospectos en pipeline</td><td class="rnum">${pros.length}</td></tr>
       <tr><td>Cotizaciones</td><td class="rnum">${cot.length} · ${money(cot.reduce((a,c)=>a+Number(c.monto||0),0))}</td></tr>
       <tr><td>Ventas del mes</td><td class="rnum">${ventaTot?money(ventaTot):'—'}</td></tr>
     </tbody></table>`;
-    if(auds.length) body+=`<div class="rlab">Auditorías técnicas — a quiénes</div><ul>${auds.map(a=>{const c=clienteById(a.cliente_id);return `<li>${esc(c?c.nombre_comercial:'—')} <span class="rmut">(${a.estatus})</span></li>`;}).join('')}</ul>`;
+    vis.forEach(x=>{ const n=catNombre(x.tipo_visita_id); catGM[n]=(catGM[n]||0)+1; });
+    body+=`<div class="rlab">Acumulado por categoría</div><p class="rcat">${catResumen(vis)}</p>`;
+    const porCli={}; vis.forEach(x=>{ porCli[x.cliente_id]=(porCli[x.cliente_id]||0)+1; });
+    const keys=Object.keys(porCli).sort((a,b)=>porCli[b]-porCli[a]);
+    if(keys.length){ body+=`<div class="rlab">Visitas por cliente</div><table><thead><tr><th>Cliente</th><th class="rnum">Visitas</th></tr></thead><tbody>${keys.map(cid=>{const c=clienteById(Number(cid));return `<tr><td>${esc(c?c.nombre_comercial:'#'+cid)}</td><td class="rnum">${porCli[cid]}</td></tr>`;}).join('')}<tr class="rtr"><td>Total</td><td class="rnum">${vis.length}</td></tr></tbody></table>`; }
+    if(auds.length) body+=`<div class="rlab">Auditorías técnicas — a quiénes</div><ul>${auds.map(a=>{const c=clienteById(a.cliente_id);return `<li>${esc(c?c.nombre_comercial:'—')} <span class="rmut">${a.estatus}</span></li>`;}).join('')}</ul>`;
     if(pros.length) body+=`<div class="rlab">Seguimiento a prospectos</div><ul>${pros.map(p=>`<li>${esc(p.nombre)} <span class="rmut">— ${p.tipo}, avance ${p.avance_pct}%</span></li>`).join('')}</ul>`;
     if(cot.length) body+=`<div class="rlab">Cotizaciones</div><ul>${cot.map(c=>`<li>${esc(cotizCli(c))} <span class="rmut">— ${money(c.monto)}, ${c.probabilidad}, ${c.estatus}</span></li>`).join('')}</ul>`;
   });
+  body+=`<div class="rgrand">Total de visitas del mes: <b>${mesTot}</b><br><span style="font-size:12.5px;font-family:Arial">Acumulado por categoría — ${Object.keys(catGM).map(k=>esc(k)+': '+catGM[k]).join(' · ')||'—'}</span></div>`;
   return body;
 }
 
