@@ -941,7 +941,7 @@ function viewObjetivos(){
 function viewEstrellas(){
   const ym=PERIODO, mes=primerDia(ym);
   const soloMios=esVendedor();
-  const puedeEditar=esVendedor()||puedeCoord()||puedeAdmin();
+  const puedeEditar=esVendedor()||puedeCoord()||puedeAdmin()||esDireccion();
   let lista=STATE.estrellas.filter(e=>String(e.mes).slice(0,10)===mes);
   if(soloMios) lista=lista.filter(e=>e.vendedor_id===SESSION.id);
   let h=`<div class="card"><div class="chead"><div class="t"><small>${ymLabel(ym)} · productos estrella</small>Estrellas del mes</div>
