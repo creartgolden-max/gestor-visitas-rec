@@ -236,6 +236,8 @@ function ymActual(){ const d=new Date(); return d.getFullYear()+'-'+String(d.get
 function primerDia(ym){ return ym+'-01'; }
 function ymLabel(ym){ const [y,m]=ym.split('-'); return MES[parseInt(m,10)-1]+' '+y; }
 function lunesDe(dstr){ const d=new Date(dstr+'T00:00:00'); const dia=(d.getDay()+6)%7; d.setDate(d.getDate()-dia); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
+function addDays(dstr,n){ const d=new Date(dstr+'T00:00:00'); d.setDate(d.getDate()+n); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
+function fmtDM(dstr){ const p=dstr.split('-'); return p[2]+'/'+p[1]; }
 function trimestreDe(ym){ const [y,m]=ym.split('-').map(Number); return y+'-Q'+(Math.floor((m-1)/3)+1); }
 function mesesTrimestre(trim){ const [y,q]=trim.split('-Q'); const base=(q-1)*3; return [0,1,2].map(i=>y+'-'+String(base+1+i).padStart(2,'0')+'-01'); }
 
@@ -1101,16 +1103,28 @@ function planMModal(p,vend){
 }
 
 function planSModal(vend){
-  openModal(`<h3>Nueva cita semanal</h3>
-    <p class="mp">${esc(usuarioNombre(vend))}</p>
+  const dias=['Lun','Mar','Mié','Jue','Vie','Sáb'];
+  const buildDias=(base)=>{ const lun=lunesDe(base||hoyStr()); return dias.map((d,i)=>{ const f=addDays(lun,i);
+    return `<label style="display:flex;align-items:center;gap:6px;font-family:Arial;font-size:12.5px;padding:7px 8px;border:1px solid var(--line);border-radius:8px;cursor:pointer">
+      <input type="checkbox" class="psDia" value="${f}" style="width:auto;accent-color:var(--green)"> ${d} ${fmtDM(f)}</label>`; }).join(''); };
+  openModal(`<h3>Nueva(s) cita(s) semanal(es)</h3>
+    <p class="mp">${esc(usuarioNombre(vend))} · marca uno o varios días de la semana</p>
     ${fldSelect('psCli','Cliente',optClientes(vend),'')}
     ${fldSelect('psTipo','Tipo de visita',optTipos(),'')}
-    <div class="fld"><label>Fecha planeada</label><input type="date" id="psFecha" value="${hoyStr()}"></div>
+    <div class="fld"><label>Semana (cualquier día de esa semana)</label><input type="date" id="psSemana" value="${hoyStr()}"></div>
+    <div class="fld"><label>Días planeados</label><div id="psDias" style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px">${buildDias(hoyStr())}</div></div>
     <div class="mbtns"><button class="act ghost" onclick="closeModal()">Cancelar</button><button class="act gold" id="psSave">Guardar</button></div>`);
-  document.getElementById('psSave').addEventListener('click',()=>{
-    const fecha=val('psFecha'); if(!fecha){ toast('Elige fecha.','err'); return; }
-    save('gvis_plan_semanal',{ semana_inicio:lunesDe(fecha), fecha_planeada:fecha, cliente_id:Number(val('psCli')),
-      vendedor_id:vend, tipo_visita_id:Number(val('psTipo')), creado_por:SESSION.id });
+  document.getElementById('psSemana').addEventListener('change',e=>{ document.getElementById('psDias').innerHTML=buildDias(e.target.value); });
+  document.getElementById('psSave').addEventListener('click',async()=>{
+    const cli=val('psCli'), tipo=val('psTipo');
+    const fechas=[...document.querySelectorAll('.psDia:checked')].map(x=>x.value);
+    if(!cli){ toast('Elige un cliente.','err'); return; }
+    if(!fechas.length){ toast('Marca al menos un día.','err'); return; }
+    const rows=fechas.map(f=>({ semana_inicio:lunesDe(f), fecha_planeada:f, cliente_id:Number(cli),
+      vendedor_id:vend, tipo_visita_id:Number(tipo), creado_por:SESSION.id }));
+    try{ const {error}=await db.from('gvis_plan_semanal').insert(rows); if(error) throw error;
+      closeModal(); toast(fechas.length>1?fechas.length+' citas creadas.':'Cita creada.','ok'); await reload(); }
+    catch(err){ console.error(err); toast('Error: '+(err.message||err),'err'); }
   });
 }
 
