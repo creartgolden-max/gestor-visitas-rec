@@ -1547,13 +1547,13 @@ function estrellaCliModal(eid){
   const yaLib=new Set(existing.filter(x=>x.nombre_libre).map(x=>String(x.nombre_libre).toLowerCase()));
   const usados=new Set();
   const chk=(v,label,badge)=>`<label style="display:flex;align-items:center;gap:8px;font-family:Arial;font-size:13px;padding:6px 8px;border:1px solid var(--line);border-radius:8px;cursor:pointer"><input type="checkbox" class="esCli" value="${esc(v)}" style="width:auto;accent-color:var(--green)"> ${esc(label)}${badge||''}</label>`;
-  // 1) Mas buscados (clientes objetivo de grupos_buscados)
+  // Mas buscados: clientes objetivo de grupos_buscados
   let secB='';
   STATE.gruposDet.forEach(d=>{
     if(d.cliente_id){ if(yaCli.has(d.cliente_id)||usados.has(d.cliente_id)) return; usados.add(d.cliente_id); const c=clienteById(d.cliente_id); secB+=chk('c:'+d.cliente_id, c?c.nombre_comercial:'#'+d.cliente_id, ''); }
     else if(d.nombre_libre){ if(yaLib.has(String(d.nombre_libre).toLowerCase())) return; secB+=chk('l:'+d.nombre_libre, d.nombre_libre, ' <span class="chipmini libre" style="margin:0">objetivo</span>'); }
   });
-  // 2) Activos y 3) Inactivos (sin repetir los ya listados)
+  // Activos e Inactivos, sin repetir los ya listados
   let secA=''; STATE.clientes.filter(c=>c.estatus==='activo' && !usados.has(c.id) && !yaCli.has(c.id)).forEach(c=>{ usados.add(c.id); secA+=chk('c:'+c.id, c.nombre_comercial, ''); });
   let secI=''; STATE.clientes.filter(c=>c.estatus==='inactivo' && !usados.has(c.id) && !yaCli.has(c.id)).forEach(c=>{ usados.add(c.id); secI+=chk('c:'+c.id, c.nombre_comercial, ''); });
   const sec=(titulo,html)=> html?`<div class="sechead" style="padding:10px 0 4px">${titulo}</div><div style="display:grid;grid-template-columns:1fr;gap:6px">${html}</div>`:'';
