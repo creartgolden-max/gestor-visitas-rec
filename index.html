@@ -220,7 +220,8 @@ const STATE={
   planMensual:[], planSemanal:[], visitas:[],
   prospectos:[], prospLog:[], grupos:[], gruposDet:[],
   compras:[], cortes:[],
-  cotiz:[], planAud:[], react:[], objetivos:[], cortesR:[]
+  cotiz:[], planAud:[], react:[], objetivos:[], cortesR:[],
+  estrellas:[], estrellasCli:[]
 };
 let PERIODO=null;         // 'YYYY-MM'
 let currentView=null;
@@ -303,6 +304,14 @@ async function loadData(){
   STATE.cortesR    = cortesR.data||[];
   STATE.config     = {};
   (config.data||[]).forEach(c=>STATE.config[c.clave]=c.valor);
+
+  // Estrellas: carga tolerante (si la tabla aún no existe, la app sigue funcionando)
+  try{
+    const est  = await db.from('gvis_estrellas').select('*');
+    const estc = await db.from('gvis_estrellas_clientes').select('*');
+    STATE.estrellas    = est.error?[]:(est.data||[]);
+    STATE.estrellasCli = estc.error?[]:(estc.data||[]);
+  }catch(e){ STATE.estrellas=[]; STATE.estrellasCli=[]; }
 }
 async function reload(){ await loadData(); render(); }
 
@@ -310,10 +319,10 @@ async function reload(){ await loadData(); render(); }
    TABS POR ROL
    ===================================================================== */
 function tabsFor(rol){
-  if(rol==='vendedor')    return [['visitas','Mi Día'],['plan','Mi Plan'],['auditorias','Auditorías'],['reactivacion','Inactivos'],['clientes','Mi Cartera'],['prospectos','Prospectos'],['buscados','Más Buscados']];
-  if(rol==='coordinador') return [['visitas','Mi Día'],['tablero','Tablero'],['plan','Plan'],['auditorias','Auditorías'],['reactivacion','Inactivos'],['clientes','Clientes'],['cotizaciones','Cotizaciones'],['prospectos','Prospectos'],['buscados','Más Buscados'],['cortes','Cortes']];
-  if(rol==='admin')       return [['consolidado','Consolidado'],['cotizaciones','Cotizaciones'],['compras','Compras'],['reactivacion','Inactivos'],['clientes','Clientes'],['catalogos','Catálogos'],['config','Umbrales'],['usuarios','Usuarios']];
-  return [['consolidado','Consolidado'],['cotizaciones','Cotizaciones'],['objetivos','Objetivos'],['clientes','Clientes'],['cortes','Cortes'],['buscados','Más Buscados']]; // direccion
+  if(rol==='vendedor')    return [['visitas','Mi Día'],['plan','Mi Plan'],['auditorias','Auditorías'],['estrella','Estrella'],['reactivacion','Inactivos'],['clientes','Mi Cartera'],['prospectos','Prospectos'],['buscados','Más Buscados']];
+  if(rol==='coordinador') return [['visitas','Mi Día'],['tablero','Tablero'],['plan','Plan'],['auditorias','Auditorías'],['estrella','Estrella'],['reactivacion','Inactivos'],['clientes','Clientes'],['cotizaciones','Cotizaciones'],['prospectos','Prospectos'],['buscados','Más Buscados'],['cortes','Cortes'],['reportes','Reportes']];
+  if(rol==='admin')       return [['consolidado','Consolidado'],['cotizaciones','Cotizaciones'],['compras','Compras'],['reactivacion','Inactivos'],['clientes','Clientes'],['estrella','Estrella'],['catalogos','Catálogos'],['config','Umbrales'],['usuarios','Usuarios'],['reportes','Reportes']];
+  return [['consolidado','Consolidado'],['cotizaciones','Cotizaciones'],['objetivos','Objetivos'],['estrella','Estrella'],['clientes','Clientes'],['cortes','Cortes'],['buscados','Más Buscados'],['reportes','Reportes']]; // direccion
 }
 
 /* =====================================================================
@@ -330,7 +339,8 @@ function render(){
   const fn={visitas:viewVisitas,plan:viewPlan,clientes:viewClientes,prospectos:viewProspectos,
             buscados:viewBuscados,tablero:viewTablero,cortes:viewCortes,compras:viewCompras,
             catalogos:viewCatalogos,config:viewConfig,usuarios:viewUsuarios,consolidado:viewConsolidado,
-            cotizaciones:viewCotizaciones,auditorias:viewAuditorias,reactivacion:viewReactivacion,objetivos:viewObjetivos}[currentView];
+            cotizaciones:viewCotizaciones,auditorias:viewAuditorias,reactivacion:viewReactivacion,objetivos:viewObjetivos,
+            estrella:viewEstrellas,reportes:viewReportes}[currentView];
   v.innerHTML = fn ? fn() : '<div class="empty">Vista no disponible.</div>';
   if(fn && fn._after) fn._after();
   bindActions();
@@ -926,6 +936,131 @@ function viewObjetivos(){
 }
 
 /* =====================================================================
+   FASE 3 · Productos estrella + Reportes PDF
+   ===================================================================== */
+function viewEstrellas(){
+  const ym=PERIODO, mes=primerDia(ym);
+  const soloMios=esVendedor();
+  const puedeEditar=esVendedor()||puedeCoord()||puedeAdmin();
+  let lista=STATE.estrellas.filter(e=>String(e.mes).slice(0,10)===mes);
+  if(soloMios) lista=lista.filter(e=>e.vendedor_id===SESSION.id);
+  let h=`<div class="card"><div class="chead"><div class="t"><small>${ymLabel(ym)} · productos estrella</small>Estrellas del mes</div>
+    ${puedeEditar?`<button class="act gold sm" data-act="nuevaEstrella">+ Producto estrella</button>`:''}</div>
+    <div class="cpad" style="font-family:Arial;font-size:12px;color:var(--muted)">Cada mes se eligen uno o más productos estrella y a qué clientes se les van a ofrecer.</div>
+    <div class="cbody">`;
+  if(!lista.length) h+=`<div class="empty">Sin productos estrella este mes.</div>`;
+  else h+=lista.map(e=>{
+    const m=marcaById(e.marca_id);
+    const cli=STATE.estrellasCli.filter(x=>x.estrella_id===e.id);
+    const chips=cli.map(x=>{ const c=clienteById(x.cliente_id); return `<span class="chipmini">${esc(c?c.nombre_comercial:'#'+x.cliente_id)}</span>`; }).join('');
+    return `<div class="trow"><div class="body">
+      <div class="ti">★ ${esc(e.producto)}${m?` <span class="badge marca">${esc(m.nombre)}</span>`:''}</div>
+      <div class="meta">${esc(usuarioNombre(e.vendedor_id))}${e.nota?' · '+esc(e.nota):''} · ${cli.length} cliente(s) a ofrecer</div>
+      <div style="margin-top:6px">${chips||'<span style="color:var(--muted);font-family:Arial;font-size:12px">sin clientes asignados</span>'}</div>
+    </div>
+    ${puedeEditar?`<div class="rowbtns"><button class="act ghost sm" data-act="addEstrellaCli" data-id="${e.id}">+ Clientes</button><button class="act ghost sm" data-act="editEstrella" data-id="${e.id}">Editar</button><button class="act danger sm" data-act="delEstrella" data-id="${e.id}">✕</button></div>`:''}
+    </div>`;
+  }).join('');
+  h+=`</div></div>`;
+  return h;
+}
+
+function viewReportes(){
+  const ym=PERIODO, lun=lunesDe(hoyStr()), dom=addDays(lun,6);
+  return `<div class="card"><div class="chead"><div class="t"><small>Impresión / PDF</small>Reportes para junta</div></div>
+    <div class="cpad">
+      <p style="font-family:Arial;font-size:13px;color:var(--muted);margin-bottom:14px">Genera el reporte y en el diálogo de impresión elige <b>"Guardar como PDF"</b> (o imprime directo).</p>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:14px">
+        <div class="card" style="margin:0"><div class="cpad">
+          <div class="sechead" style="padding:0 0 6px">Junta semanal · lunes</div>
+          <p style="font-family:Arial;font-size:12.5px;color:var(--muted)">Visitas por cliente y total general de la semana ${fmtDM(lun)}–${fmtDM(dom)}, por vendedor.</p>
+          <button class="act gold" data-act="repSemanal" style="margin-top:10px">Generar PDF semanal</button>
+        </div></div>
+        <div class="card" style="margin:0"><div class="cpad">
+          <div class="sechead" style="padding:0 0 6px">Cierre mensual · ${ymLabel(ym)}</div>
+          <p style="font-family:Arial;font-size:12.5px;color:var(--muted)">Cumplimiento al plan, prospectos, auditorías técnicas y a quiénes, cotizaciones y ventas del mes, por vendedor.</p>
+          <button class="act gold" data-act="repMensual" style="margin-top:10px">Generar PDF mensual</button>
+        </div></div>
+      </div>
+    </div></div>`;
+}
+
+const REPORT_CSS = `
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:Arial,Helvetica,sans-serif;color:#1a2e22;padding:26px 32px;line-height:1.5}
+.rhead{border-bottom:3px solid #0F2818;padding-bottom:12px;margin-bottom:16px}
+.rbrand{font-size:10px;letter-spacing:.24em;text-transform:uppercase;color:#a8873f;font-weight:700}
+h1{font-family:Georgia,'Times New Roman',serif;color:#0F2818;font-size:23px;margin-top:4px}
+.rsub{font-size:12px;color:#6b6457;margin-top:3px}
+h2{font-family:Georgia,serif;color:#0F2818;font-size:16px;margin:18px 0 5px;border-bottom:1px solid #d9d3c6;padding-bottom:4px;display:flex;justify-content:space-between;align-items:baseline}
+.rtot{font-family:Arial;font-size:12px;color:#a8873f;font-weight:700}
+table{width:100%;border-collapse:collapse;font-size:12.5px;margin:3px 0 6px}
+th{text-align:left;font-size:9px;letter-spacing:.1em;text-transform:uppercase;color:#6b6457;border-bottom:1.5px solid #d9d3c6;padding:6px 8px}
+td{padding:6px 8px;border-bottom:1px solid #ececec}
+.rnum{text-align:right;font-variant-numeric:tabular-nums}
+.rtr td{font-weight:bold;border-top:1.5px solid #d9d3c6;border-bottom:none}
+.rgrand{margin-top:16px;padding:12px 14px;background:#f4f1ea;border:1px solid #d9d3c6;border-radius:8px;font-size:15px;font-family:Georgia,serif;color:#0F2818}
+.rlab{font-size:10px;letter-spacing:.06em;text-transform:uppercase;color:#a8873f;font-weight:700;margin:8px 0 2px}
+ul{margin:2px 0 8px 20px;font-size:12.5px}
+li{margin:2px 0}
+.rmut{color:#6b6457}
+.rempty{color:#6b6457;font-style:italic;font-size:12px;margin:4px 0}
+@media print{ body{padding:6px} h2{page-break-after:avoid} table,ul{page-break-inside:avoid} }
+`;
+function openPrint(title, body){
+  const w=window.open('','_blank');
+  if(!w){ toast('Permite ventanas emergentes para generar el PDF.','err'); return; }
+  w.document.write('<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"><title>'+title+'</title><style>'+REPORT_CSS+'</style></head><body>'+body+'<scr'+'ipt>window.onload=function(){setTimeout(function(){window.print();},350);};<\/scr'+'ipt></body></html>');
+  w.document.close();
+}
+function buildReportSemanal(){
+  const lun=lunesDe(hoyStr()), dom=addDays(lun,6);
+  let body=`<div class="rhead"><div class="rbrand">Recouromex · Gestión Comercial</div><h1>Reporte semanal de visitas</h1>
+    <div class="rsub">Semana ${fmtFecha(lun)} al ${fmtFecha(dom)} · generado ${fmtFecha(hoyStr())}</div></div>`;
+  let gran=0;
+  vendedores().forEach(v=>{
+    const vis=STATE.visitas.filter(x=>x.vendedor_id===v.id && x.realizada && x.fecha>=lun && x.fecha<=dom);
+    const porCli={}; vis.forEach(x=>{ porCli[x.cliente_id]=(porCli[x.cliente_id]||0)+1; });
+    const keys=Object.keys(porCli).sort((a,b)=>porCli[b]-porCli[a]);
+    gran+=vis.length;
+    body+=`<h2>${esc(v.nombre)} <span class="rtot">${vis.length} visita(s)</span></h2>`;
+    if(!keys.length) body+=`<p class="rempty">Sin visitas esta semana.</p>`;
+    else body+=`<table><thead><tr><th>Cliente</th><th class="rnum">Visitas</th></tr></thead><tbody>${keys.map(cid=>{const c=clienteById(Number(cid));return `<tr><td>${esc(c?c.nombre_comercial:'#'+cid)}</td><td class="rnum">${porCli[cid]}</td></tr>`;}).join('')}<tr class="rtr"><td>Total ${esc(v.nombre)}</td><td class="rnum">${vis.length}</td></tr></tbody></table>`;
+  });
+  body+=`<div class="rgrand">Total general de la semana: <b>${gran}</b> visita(s)</div>`;
+  return body;
+}
+function buildReportMensual(){
+  const ym=PERIODO, ini=primerDia(ym);
+  const f=new Date(ini), fin=new Date(f.getFullYear(),f.getMonth()+1,0);
+  const finStr=fin.getFullYear()+'-'+String(fin.getMonth()+1).padStart(2,'0')+'-'+String(fin.getDate()).padStart(2,'0');
+  let body=`<div class="rhead"><div class="rbrand">Recouromex · Gestión Comercial</div><h1>Reporte mensual — ${ymLabel(ym)}</h1>
+    <div class="rsub">Generado ${fmtFecha(hoyStr())}</div></div>`;
+  vendedores().forEach(v=>{
+    const plan=STATE.planMensual.filter(p=>p.vendedor_id===v.id && String(p.mes).slice(0,7)===ym).reduce((a,p)=>a+p.cantidad,0);
+    const real=STATE.visitas.filter(x=>x.vendedor_id===v.id && x.realizada && x.fecha>=ini && x.fecha<=finStr).length;
+    const pct=plan?Math.round(real/plan*100):0;
+    const pros=STATE.prospectos.filter(p=>p.activo && p.vendedor_id===v.id);
+    const auds=STATE.planAud.filter(a=>a.vendedor_id===v.id && String(a.mes).slice(0,7)===ym);
+    const audReal=auds.filter(a=>a.estatus==='realizada').length;
+    const cot=STATE.cotiz.filter(c=>c.vendedor_id===v.id && String(c.mes).slice(0,10)===ini);
+    const ventaTot=STATE.compras.filter(c=>String(c.mes).slice(0,10)===ini && (clienteById(c.cliente_id)||{}).vendedor_id===v.id).reduce((a,c)=>a+Number(c.monto||0),0);
+    body+=`<h2>${esc(v.nombre)}</h2>`;
+    body+=`<table><tbody>
+      <tr><td>Cumplimiento al plan</td><td class="rnum">${real} de ${plan||0}${plan?' · '+pct+'%':''}</td></tr>
+      <tr><td>Auditorías técnicas</td><td class="rnum">${auds.length} planeadas · ${audReal} realizadas</td></tr>
+      <tr><td>Prospectos en pipeline</td><td class="rnum">${pros.length}</td></tr>
+      <tr><td>Cotizaciones</td><td class="rnum">${cot.length} · ${money(cot.reduce((a,c)=>a+Number(c.monto||0),0))}</td></tr>
+      <tr><td>Ventas del mes</td><td class="rnum">${ventaTot?money(ventaTot):'—'}</td></tr>
+    </tbody></table>`;
+    if(auds.length) body+=`<div class="rlab">Auditorías técnicas — a quiénes</div><ul>${auds.map(a=>{const c=clienteById(a.cliente_id);return `<li>${esc(c?c.nombre_comercial:'—')} <span class="rmut">(${a.estatus})</span></li>`;}).join('')}</ul>`;
+    if(pros.length) body+=`<div class="rlab">Seguimiento a prospectos</div><ul>${pros.map(p=>`<li>${esc(p.nombre)} <span class="rmut">— ${p.tipo}, avance ${p.avance_pct}%</span></li>`).join('')}</ul>`;
+    if(cot.length) body+=`<div class="rlab">Cotizaciones</div><ul>${cot.map(c=>`<li>${esc(cotizCli(c))} <span class="rmut">— ${money(c.monto)}, ${c.probabilidad}, ${c.estatus}</span></li>`).join('')}</ul>`;
+  });
+  return body;
+}
+
+/* =====================================================================
    MODAL genérico
    ===================================================================== */
 function openModal(html){ document.getElementById('modalBox').innerHTML=html; document.getElementById('modalWrap').classList.remove('hidden'); }
@@ -1044,7 +1179,17 @@ const ACTIONS={
   /* ---- OBJETIVOS ---- */
   nuevoObj(){ objModal(null); },
   editObj(d){ objModal(STATE.objetivos.find(x=>x.id==d.id)); },
-  cortarObj(d){ corteResModal(Number(d.id), d.cuatri); }
+  cortarObj(d){ corteResModal(Number(d.id), d.cuatri); },
+
+  /* ---- ESTRELLA ---- */
+  nuevaEstrella(){ estrellaModal(null); },
+  editEstrella(d){ estrellaModal(STATE.estrellas.find(x=>x.id==d.id)); },
+  addEstrellaCli(d){ estrellaCliModal(Number(d.id)); },
+  delEstrella(d){ remove('gvis_estrellas',d.id,'¿Eliminar este producto estrella y sus clientes?'); },
+
+  /* ---- REPORTES ---- */
+  repSemanal(){ openPrint('Reporte semanal · Recouromex', buildReportSemanal()); },
+  repMensual(){ openPrint('Reporte mensual · Recouromex', buildReportMensual()); }
 };
 
 async function userUpsert(args){
@@ -1378,6 +1523,38 @@ function corteResModal(objId, cuatri){
       else { await db.from('gvis_cortes_resultados').insert(payload); }
       closeModal(); toast('Corte registrado.','ok'); await reload();
     }catch(e){ console.error(e); toast('Error: '+(e.message||e),'err'); }
+  });
+}
+function estrellaModal(e){
+  const vd=esVendedor()?SESSION.id:(e?e.vendedor_id:((vendedores()[0]||{}).id||''));
+  openModal(`<h3>${e?'Editar':'Nuevo'} producto estrella</h3><p class="mp">${ymLabel(PERIODO)}</p>
+    <div class="fld"><label>Producto</label><input type="text" id="esProd" value="${e?esc(e.producto):''}"></div>
+    ${fldSelect('esMarca','Marca (opcional)',optMarcas(),e?e.marca_id:'')}
+    ${esVendedor()?'':fldSelect('esVend','Vendedor',vendedores().map(v=>[v.id,v.nombre]),vd)}
+    <div class="fld"><label>Nota</label><input type="text" id="esNota" value="${e?esc(e.nota||''):''}"></div>
+    <div class="mbtns"><button class="act ghost" onclick="closeModal()">Cancelar</button><button class="act gold" id="esSave">Guardar</button></div>`);
+  document.getElementById('esSave').addEventListener('click',()=>{
+    const prod=val('esProd'); if(!prod){ toast('Escribe el producto.','err'); return; }
+    save('gvis_estrellas',{ id:e?e.id:undefined, mes:primerDia(PERIODO), producto:prod,
+      marca_id:val('esMarca')?Number(val('esMarca')):null,
+      vendedor_id:esVendedor()?SESSION.id:(val('esVend')||null), nota:val('esNota')||null, creado_por:SESSION.id });
+  });
+}
+function estrellaCliModal(eid){
+  const e=STATE.estrellas.find(x=>x.id===eid);
+  const ya=new Set(STATE.estrellasCli.filter(x=>x.estrella_id===eid).map(x=>x.cliente_id));
+  const disp=STATE.clientes.filter(c=>c.vendedor_id===e.vendedor_id && c.estatus!=='inactivo' && !ya.has(c.id));
+  openModal(`<h3>Clientes a ofrecer</h3><p class="mp">★ ${esc(e.producto)} · marca uno o varios</p>
+    ${disp.length?`<div class="fld"><div style="display:grid;grid-template-columns:1fr;gap:6px;max-height:320px;overflow-y:auto">${disp.map(c=>`<label style="display:flex;align-items:center;gap:8px;font-family:Arial;font-size:13px;padding:6px 8px;border:1px solid var(--line);border-radius:8px;cursor:pointer"><input type="checkbox" class="esCli" value="${c.id}" style="width:auto;accent-color:var(--green)"> ${esc(c.nombre_comercial)}</label>`).join('')}</div></div>`
+      :`<div class="empty">Ya agregaste todos los clientes de este vendedor (o no tiene clientes activos).</div>`}
+    <div class="mbtns"><button class="act ghost" onclick="closeModal()">Cerrar</button>${disp.length?`<button class="act gold" id="esCliSave">Agregar</button>`:''}</div>`);
+  const b=document.getElementById('esCliSave');
+  if(b) b.addEventListener('click',async()=>{
+    const ids=[...document.querySelectorAll('.esCli:checked')].map(x=>Number(x.value));
+    if(!ids.length){ toast('Marca al menos un cliente.','err'); return; }
+    try{ const {error}=await db.from('gvis_estrellas_clientes').insert(ids.map(cid=>({estrella_id:eid,cliente_id:cid}))); if(error) throw error;
+      closeModal(); toast('Clientes agregados.','ok'); await reload(); }
+    catch(err){ console.error(err); toast('Error: '+(err.message||err),'err'); }
   });
 }
 window.closeModal=closeModal;
