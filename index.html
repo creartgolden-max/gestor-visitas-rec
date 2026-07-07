@@ -1,0 +1,1137 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Gestor de Visitas — Recouromex</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  :root{
+    --ink:#1a2e22;
+    --green:#0F2818;        /* verde forest Recouromex */
+    --green-deep:#0a1c11;
+    --accent:#C9A961;       /* dorado Recouromex */
+    --accent-deep:#a8873f;
+    --paper:#f4f1ea;
+    --card:#ffffff;
+    --line:#d9d3c6;
+    --ok:#2e7d4f;
+    --warn:#c9952b;
+    --bad:#b53a2e;
+    --muted:#6b6457;
+    --shadow:0 1px 3px rgba(15,40,24,.08),0 8px 24px rgba(15,40,24,.08);
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{
+    font-family:Georgia,'Times New Roman',serif;
+    background:
+      radial-gradient(1200px 600px at 80% -10%,rgba(201,169,97,.12),transparent 60%),
+      linear-gradient(180deg,#efeae0,#f4f1ea);
+    color:var(--ink);min-height:100vh;padding:28px 18px 70px;
+  }
+  .wrap{max-width:1120px;margin:0 auto}
+  header.top{
+    display:flex;justify-content:space-between;align-items:flex-end;
+    border-bottom:3px solid var(--green);padding-bottom:16px;margin-bottom:18px;flex-wrap:wrap;gap:14px;
+  }
+  .brand .eyebrow{font-family:Arial,Helvetica,sans-serif;font-size:11px;letter-spacing:.28em;text-transform:uppercase;color:var(--accent-deep);font-weight:700}
+  .brand h1{font-size:27px;color:var(--green);letter-spacing:.5px;line-height:1.1;margin-top:4px}
+  .brand .sub{font-family:Arial,sans-serif;font-size:13px;color:var(--muted);margin-top:5px}
+  .person{text-align:right;font-family:Arial,sans-serif}
+  .person .lbl{font-size:10px;letter-spacing:.2em;text-transform:uppercase;color:var(--muted)}
+  .person .name{font-family:Georgia,serif;font-size:19px;color:var(--ink);font-weight:bold;margin-top:2px}
+  .person .role{font-size:12px;color:var(--accent-deep);margin-top:2px}
+
+  .ctrlbar{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:9px 16px;margin-bottom:16px;font-family:Arial,sans-serif;font-size:12px;box-shadow:var(--shadow)}
+  .ctrlbar .who{color:var(--muted)} .ctrlbar .who b{color:var(--green);font-family:Georgia,serif;font-size:14px}
+  .ctrlbar select{font-family:Georgia,serif;font-size:13px;color:var(--green);border:1px solid var(--line);border-radius:8px;padding:5px 9px;background:#fff;cursor:pointer;margin-left:6px}
+  .pill2{display:inline-block;padding:3px 10px;border-radius:20px;font-size:10.5px;font-weight:700;margin-left:6px;letter-spacing:.04em;text-transform:uppercase;background:rgba(15,40,24,.1);color:var(--green)}
+
+  .tabs{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:18px}
+  .tab{font-family:Arial,sans-serif;font-size:13px;cursor:pointer;border:1px solid var(--line);background:#fff;color:var(--green);padding:9px 16px;border-radius:10px;transition:.15s}
+  .tab.on{background:var(--green);color:#fff;border-color:var(--green)}
+  .tab:hover:not(.on){border-color:var(--green)}
+
+  .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:14px;margin-bottom:18px}
+  .stat{background:var(--card);border:1px solid var(--line);border-radius:14px;box-shadow:var(--shadow);padding:16px 18px}
+  .stat .k{font-family:Arial,sans-serif;font-size:10px;letter-spacing:.18em;text-transform:uppercase;color:var(--muted)}
+  .stat .v{font-family:Georgia,serif;font-size:34px;font-weight:bold;line-height:1.1;margin-top:4px}
+  .stat .s{font-family:Arial,sans-serif;font-size:11px;color:var(--muted);margin-top:2px}
+
+  .card{background:var(--card);border:1px solid var(--line);border-radius:16px;box-shadow:var(--shadow);overflow:hidden;margin-bottom:18px}
+  .card .chead{padding:15px 20px;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;align-items:center;background:linear-gradient(180deg,#fbfaf6,#f6f3ec);gap:10px;flex-wrap:wrap}
+  .card .chead .t{font-size:18px;color:var(--green)}
+  .card .chead .t small{display:block;font-family:Arial,sans-serif;font-size:10px;letter-spacing:.2em;text-transform:uppercase;color:var(--accent-deep);margin-bottom:3px}
+  .cbody{padding:6px 0}
+  .cpad{padding:16px 20px}
+
+  .trow{display:flex;align-items:center;gap:12px;padding:12px 20px;border-bottom:1px dashed var(--line)}
+  .trow:last-child{border-bottom:none}
+  .trow .chk{width:22px;height:22px;flex:0 0 auto;cursor:pointer;accent-color:var(--green)}
+  .trow .body{flex:1;min-width:0}
+  .trow .ti{font-size:15px}
+  .trow .ti.done{text-decoration:line-through;color:var(--muted)}
+  .trow .de{font-family:Arial,sans-serif;font-size:12px;color:var(--muted);margin-top:2px}
+  .trow .meta{font-family:Arial,sans-serif;font-size:11px;color:var(--muted);margin-top:3px}
+  .empty{font-family:Arial,sans-serif;font-size:13px;color:var(--muted);font-style:italic;padding:16px 20px}
+
+  table.grid{width:100%;border-collapse:collapse;font-family:Arial,sans-serif;font-size:13px}
+  table.grid th{text-align:left;font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);padding:10px 20px;border-bottom:1px solid var(--line);white-space:nowrap}
+  table.grid td{padding:11px 20px;border-bottom:1px dashed var(--line);vertical-align:middle}
+  table.grid tr:last-child td{border-bottom:none}
+  table.grid td .nm{font-family:Georgia,serif;font-size:14px;color:var(--ink)}
+  table.grid input[type=number],table.grid input[type=text]{font-family:Arial,sans-serif;font-size:13px;padding:5px 7px;border:1px solid var(--line);border-radius:7px;width:110px}
+  .tblwrap{overflow-x:auto}
+  .pct{font-family:Georgia,serif;font-weight:bold;font-size:16px}
+
+  .badge{display:inline-block;font-family:Arial,sans-serif;font-size:10px;font-weight:700;letter-spacing:.05em;padding:2px 9px;border-radius:20px;text-transform:uppercase}
+  .badge.O{background:rgba(74,144,217,.15);color:#2c5f8f}
+  .badge.T{background:rgba(47,163,107,.15);color:#1f6e48}
+  .badge.E{background:rgba(201,162,39,.18);color:#8a6f16}
+  .badge.est-activo{background:rgba(46,125,79,.15);color:var(--ok)}
+  .badge.est-inactivo{background:rgba(181,58,46,.12);color:var(--bad)}
+  .badge.est-mostrador{background:rgba(107,100,87,.15);color:var(--muted)}
+  .badge.marca{background:rgba(15,40,24,.08);color:var(--green)}
+  .chipmini{display:inline-block;font-family:Arial,sans-serif;font-size:11px;padding:2px 9px;border-radius:14px;background:rgba(15,40,24,.07);color:var(--green);margin:2px 4px 2px 0}
+  .chipmini.libre{background:rgba(201,169,97,.18);color:#8a6f16}
+
+  button.act{font-family:Arial,sans-serif;font-size:13px;letter-spacing:.03em;cursor:pointer;border:1px solid var(--green);background:var(--green);color:#fff;padding:9px 16px;border-radius:9px;transition:.15s}
+  button.act.ghost{background:transparent;color:var(--green)}
+  button.act.gold{background:var(--accent);border-color:var(--accent-deep);color:#3a2d05}
+  button.act.danger{background:#fff;border-color:var(--bad);color:var(--bad)}
+  button.act.sm{padding:6px 12px;font-size:12px}
+  button.act:disabled{opacity:.5;cursor:not-allowed}
+  button.act:hover:not(:disabled){filter:brightness(.94)}
+  .rowbtns{display:flex;gap:8px;flex-wrap:wrap}
+
+  .filtbar{display:flex;gap:10px;flex-wrap:wrap;align-items:center;font-family:Arial,sans-serif;font-size:12px;color:var(--muted)}
+  .filtbar select,.filtbar input{font-family:Arial,sans-serif;font-size:13px;padding:6px 9px;border:1px solid var(--line);border-radius:8px;background:#fff;color:var(--ink)}
+
+  .overlay{position:fixed;inset:0;z-index:1000;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,rgba(10,28,17,.96),rgba(15,40,24,.96));padding:20px}
+  .overlay.hidden{display:none}
+  .loginbox{background:var(--card);border-radius:18px;box-shadow:0 20px 60px rgba(0,0,0,.35);width:100%;max-width:390px;padding:32px 30px;text-align:center}
+  .loginbox .eyebrow{font-family:Arial,sans-serif;font-size:11px;letter-spacing:.28em;text-transform:uppercase;color:var(--accent-deep);font-weight:700}
+  .loginbox h2{font-family:Georgia,serif;font-size:23px;color:var(--green);margin:8px 0 4px}
+  .loginbox p{font-family:Arial,sans-serif;font-size:12.5px;color:var(--muted);line-height:1.5;margin-bottom:18px}
+  .loginbox input{width:100%;font-family:Arial,sans-serif;font-size:22px;letter-spacing:.4em;text-align:center;padding:12px;border:1px solid var(--line);border-radius:10px;margin-bottom:14px}
+  .loginbox button{width:100%;font-family:Arial,sans-serif;font-size:14px;font-weight:700;cursor:pointer;border:none;background:var(--green);color:#fff;padding:13px;border-radius:10px}
+  .loginbox button:hover{background:var(--green-deep)}
+  .loginbox .msg{font-family:Arial,sans-serif;font-size:12.5px;margin-top:14px;min-height:18px}
+  .loginbox .msg.err{color:var(--bad)} .loginbox .msg.info{color:var(--muted)}
+  .teaser{margin-top:22px;padding-top:18px;border-top:1px dashed var(--line);text-align:left}
+  .teaser .th{font-family:Arial,sans-serif;font-size:10px;letter-spacing:.18em;text-transform:uppercase;color:var(--accent-deep);font-weight:700;margin-bottom:8px}
+  .teaser ul{list-style:none;font-family:Arial,sans-serif;font-size:12px;color:var(--muted);line-height:1.9}
+  .teaser li::before{content:"›";color:var(--accent-deep);font-weight:700;margin-right:8px}
+
+  .mwrap{position:fixed;inset:0;z-index:1050;display:flex;align-items:center;justify-content:center;background:rgba(10,28,17,.55);padding:20px;overflow-y:auto}
+  .mwrap.hidden{display:none}
+  .mbox{background:var(--card);border-radius:16px;box-shadow:0 20px 60px rgba(0,0,0,.35);width:100%;max-width:460px;padding:26px 26px 22px;max-height:calc(100vh - 40px);overflow-y:auto;overscroll-behavior:contain;margin:auto}
+  .mbox h3{font-family:Georgia,serif;font-size:20px;color:var(--green);margin-bottom:4px}
+  .mbox .mp{font-family:Arial,sans-serif;font-size:12.5px;color:var(--muted);margin-bottom:16px;line-height:1.5}
+  .fld{margin-bottom:13px;font-family:Arial,sans-serif}
+  .fld label{display:block;font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin-bottom:5px}
+  .fld input,.fld select,.fld textarea{width:100%;font-family:Arial,sans-serif;font-size:14px;padding:9px 11px;border:1px solid var(--line);border-radius:9px;color:var(--ink)}
+  .fld textarea{min-height:70px;resize:vertical}
+  .fld.chkline{display:flex;align-items:center;gap:9px}
+  .fld.chkline input{width:auto}
+  .fld.chkline label{margin-bottom:0;text-transform:none;letter-spacing:0;font-size:13px;color:var(--ink)}
+  .fld2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  .mbtns{display:flex;gap:10px;justify-content:flex-end;margin-top:18px}
+
+  .toast{position:fixed;left:50%;bottom:26px;transform:translateX(-50%) translateY(80px);background:var(--green-deep);color:#fff;font-family:Arial,sans-serif;font-size:13px;padding:13px 22px;border-radius:10px;box-shadow:0 10px 30px rgba(0,0,0,.3);opacity:0;transition:.25s;z-index:1100;max-width:90vw;text-align:center}
+  .toast.show{transform:translateX(-50%) translateY(0);opacity:1}
+  .toast.err{background:var(--bad)} .toast.ok{background:var(--ok)}
+  .note{font-family:Arial,sans-serif;font-size:11px;color:var(--muted);text-align:center;margin-top:18px;line-height:1.6}
+  .sechead{font-family:Arial,sans-serif;font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:var(--accent-deep);font-weight:700;padding:14px 20px 4px}
+  .swatch{display:inline-block;width:14px;height:14px;border-radius:4px;border:1px solid rgba(0,0,0,.15);vertical-align:middle;margin-right:6px}
+</style>
+</head>
+<body>
+
+<div class="overlay" id="loginOverlay">
+  <div class="loginbox">
+    <div class="eyebrow">Recouromex · Gestor de Visitas</div>
+    <h2>Acceso</h2>
+    <p>Ingresa tu PIN para entrar a tu tablero.</p>
+    <input id="pinInput" type="password" inputmode="numeric" maxlength="6" placeholder="••••" autocomplete="off">
+    <button id="pinBtn">Entrar</button>
+    <div class="msg info" id="loginMsg">Conectando…</div>
+    <div class="teaser">
+      <div class="th">Qué encontrarás aquí</div>
+      <ul>
+        <li>Vendedor: registra tus visitas del día y tu plan</li>
+        <li>Coordinador: plan mensual/semanal y clientes más buscados</li>
+        <li>Admin: compras del mes, catálogos y umbrales</li>
+        <li>Dirección: consolidado y cortes trimestrales de cartera</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<div class="mwrap hidden" id="modalWrap"><div class="mbox" id="modalBox"></div></div>
+<div id="toast" class="toast"></div>
+
+<div class="wrap" id="app" style="display:none">
+  <div class="ctrlbar">
+    <div class="who">En sesión: <b id="sessUser">—</b><span class="pill2" id="sessPill">—</span></div>
+    <div>
+      Periodo: <select id="periodSel"></select>
+      <button class="act ghost sm" id="logoutBtn" style="margin-left:12px">Salir</button>
+    </div>
+  </div>
+
+  <header class="top">
+    <div class="brand">
+      <div class="eyebrow">Recouromex · Gestión Comercial</div>
+      <h1>Gestor de Visitas</h1>
+      <div class="sub" id="hoyLbl">—</div>
+    </div>
+    <div class="person">
+      <div class="lbl">Usuario</div>
+      <div class="name" id="pName">—</div>
+      <div class="role" id="pRole">—</div>
+    </div>
+  </header>
+
+  <div class="tabs" id="tabs"></div>
+  <div id="view"></div>
+
+  <div class="note">
+    Gestor de Visitas REC · datos en Supabase (proyecto principal, prefijo <code>gvis_</code>).<br>
+    Los PIN se administran directo en Supabase. Cierra tu sesión al terminar.
+  </div>
+</div>
+
+<script>
+/* =====================================================================
+   ███  CONFIG — EDITA SOLO ESTE BLOQUE  ███
+   Rodrigo pega la URL y la ANON key del proyecto PRINCIPAL.
+   ===================================================================== */
+const CONFIG = {
+  SUPABASE_URL:      "PEGAR_AQUI_LA_URL_DE_SUPABASE",   // ej: https://qcwpnovwyhzhqqmhjxco.supabase.co
+  SUPABASE_ANON_KEY: "PEGAR_AQUI_LA_ANON_KEY"           // la llave publica (anon)
+};
+/* ===================================================================== */
+
+let db=null;
+const SESSION={pin:null,id:null,nombre:null,rol:null};
+const STATE={
+  usuarios:[], config:{}, tipos:[], marcas:[], clientes:[],
+  planMensual:[], planSemanal:[], visitas:[],
+  prospectos:[], prospLog:[], grupos:[], gruposDet:[],
+  compras:[], cortes:[]
+};
+let PERIODO=null;         // 'YYYY-MM'
+let currentView=null;
+const MES=['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+
+const cfgOK = CONFIG.SUPABASE_URL && !CONFIG.SUPABASE_URL.startsWith("PEGAR")
+           && CONFIG.SUPABASE_ANON_KEY && !CONFIG.SUPABASE_ANON_KEY.startsWith("PEGAR");
+
+/* ---------------- helpers de fecha ---------------- */
+function hoyStr(){ const d=new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
+function fmtFecha(s){ if(!s) return ''; const p=String(s).slice(0,10).split('-'); return p[2]+'/'+p[1]+'/'+p[0]; }
+function ymActual(){ const d=new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0'); }
+function primerDia(ym){ return ym+'-01'; }
+function ymLabel(ym){ const [y,m]=ym.split('-'); return MES[parseInt(m,10)-1]+' '+y; }
+function lunesDe(dstr){ const d=new Date(dstr+'T00:00:00'); const dia=(d.getDay()+6)%7; d.setDate(d.getDate()-dia); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
+function trimestreDe(ym){ const [y,m]=ym.split('-').map(Number); return y+'-Q'+(Math.floor((m-1)/3)+1); }
+function mesesTrimestre(trim){ const [y,q]=trim.split('-Q'); const base=(q-1)*3; return [0,1,2].map(i=>y+'-'+String(base+1+i).padStart(2,'0')+'-01'); }
+
+/* ---------------- helpers varios ---------------- */
+function esc(s){ return (s==null?'':String(s)).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function money(n){ return '$'+Number(n||0).toLocaleString('es-MX',{minimumFractionDigits:0,maximumFractionDigits:0}); }
+function toast(msg,kind){ const t=document.getElementById('toast'); t.textContent=msg; t.className='toast show'+(kind?(' '+kind):''); clearTimeout(t._h); t._h=setTimeout(()=>{t.className='toast';},3800); }
+function rolLabel(r){ return r==='direccion'?'Dirección': r==='coordinador'?'Coordinador': r==='admin'?'Admin':'Vendedor'; }
+function usuarioNombre(id){ const u=STATE.usuarios.find(x=>x.id===id); return u?u.nombre:(id||'—'); }
+function tipoById(id){ return STATE.tipos.find(t=>t.id===id); }
+function marcaById(id){ return STATE.marcas.find(m=>m.id===id); }
+function clienteById(id){ return STATE.clientes.find(c=>c.id===id); }
+function cfgNum(clave,def){ const v=STATE.config[clave]; return v==null?def:Number(v); }
+function esVendedor(){ return SESSION.rol==='vendedor'; }
+function puedeAdmin(){ return SESSION.rol==='admin'; }
+function puedeCoord(){ return SESSION.rol==='coordinador'; }
+function esDireccion(){ return SESSION.rol==='direccion'; }
+
+/* ---------------- vendedores (para selects) ---------------- */
+function vendedores(){ return STATE.usuarios.filter(u=>u.rol==='vendedor'||u.rol==='coordinador'); }
+
+/* =====================================================================
+   CARGA DE DATOS
+   ===================================================================== */
+async function loadData(){
+  const q = (t,cols='*')=> db.from(t).select(cols);
+  const [
+    usuarios, tipos, marcas, clientes, config,
+    planM, planS, visitas, prosp, prospLog,
+    grupos, gruposDet, compras, cortes
+  ] = await Promise.all([
+    db.from('gvis_usuarios_pub').select('*'),
+    q('gvis_tipos_visita'), q('gvis_marcas'),
+    q('gvis_clientes'), q('gvis_config'),
+    q('gvis_plan_mensual'), q('gvis_plan_semanal'), q('gvis_visitas'),
+    q('gvis_prospectos'), q('gvis_prospecto_log'),
+    q('gvis_grupos_buscados'), q('gvis_grupos_buscados_det'),
+    q('gvis_compras_mensuales'), q('gvis_cortes')
+  ]);
+  const err = [usuarios,tipos,marcas,clientes,config,planM,planS,visitas,prosp,prospLog,grupos,gruposDet,compras,cortes].find(r=>r.error);
+  if(err) throw err.error;
+
+  STATE.usuarios   = usuarios.data||[];
+  STATE.tipos      = (tipos.data||[]).sort((a,b)=>a.id-b.id);
+  STATE.marcas     = (marcas.data||[]).sort((a,b)=>a.id-b.id);
+  STATE.clientes   = (clientes.data||[]).sort((a,b)=>a.nombre_comercial.localeCompare(b.nombre_comercial));
+  STATE.planMensual= planM.data||[];
+  STATE.planSemanal= planS.data||[];
+  STATE.visitas    = visitas.data||[];
+  STATE.prospectos = prosp.data||[];
+  STATE.prospLog   = prospLog.data||[];
+  STATE.grupos     = grupos.data||[];
+  STATE.gruposDet  = gruposDet.data||[];
+  STATE.compras    = compras.data||[];
+  STATE.cortes     = cortes.data||[];
+  STATE.config     = {};
+  (config.data||[]).forEach(c=>STATE.config[c.clave]=c.valor);
+}
+async function reload(){ await loadData(); render(); }
+
+/* =====================================================================
+   TABS POR ROL
+   ===================================================================== */
+function tabsFor(rol){
+  if(rol==='vendedor')    return [['visitas','Mi Día'],['plan','Mi Plan'],['clientes','Mi Cartera'],['prospectos','Prospectos'],['buscados','Más Buscados']];
+  if(rol==='coordinador') return [['tablero','Tablero'],['plan','Plan'],['clientes','Clientes'],['prospectos','Prospectos'],['buscados','Más Buscados'],['cortes','Cortes']];
+  if(rol==='admin')       return [['compras','Compras'],['clientes','Clientes'],['catalogos','Catálogos'],['config','Umbrales'],['usuarios','Usuarios']];
+  return [['consolidado','Consolidado'],['clientes','Clientes'],['cortes','Cortes'],['buscados','Más Buscados']]; // direccion
+}
+
+/* =====================================================================
+   RENDER PRINCIPAL
+   ===================================================================== */
+function render(){
+  const tabs=tabsFor(SESSION.rol);
+  if(!currentView || !tabs.some(t=>t[0]===currentView)) currentView=tabs[0][0];
+  const tb=document.getElementById('tabs');
+  tb.innerHTML=tabs.map(t=>`<div class="tab ${t[0]===currentView?'on':''}" data-v="${t[0]}">${t[1]}</div>`).join('');
+  tb.querySelectorAll('.tab').forEach(el=>el.addEventListener('click',()=>{ currentView=el.dataset.v; render(); }));
+
+  const v=document.getElementById('view');
+  const fn={visitas:viewVisitas,plan:viewPlan,clientes:viewClientes,prospectos:viewProspectos,
+            buscados:viewBuscados,tablero:viewTablero,cortes:viewCortes,compras:viewCompras,
+            catalogos:viewCatalogos,config:viewConfig,usuarios:viewUsuarios,consolidado:viewConsolidado}[currentView];
+  v.innerHTML = fn ? fn() : '<div class="empty">Vista no disponible.</div>';
+  if(fn && fn._after) fn._after();
+  bindActions();
+}
+
+/* generic action binder: elements with data-act */
+function bindActions(){
+  document.querySelectorAll('[data-act]').forEach(el=>{
+    if(el._bound) return; el._bound=true;
+    el.addEventListener('click',()=>ACTIONS[el.dataset.act] && ACTIONS[el.dataset.act](el.dataset));
+  });
+}
+
+/* =====================================================================
+   VISTA: MI DÍA / VISITAS (vendedor; coord ve como lectura por vendedor)
+   ===================================================================== */
+function misClientes(uid){ return STATE.clientes.filter(c=>c.vendedor_id===uid && c.estatus!=='inactivo'); }
+
+function viewVisitas(){
+  const uid=SESSION.id, hoy=hoyStr();
+  const delDia=STATE.visitas.filter(v=>v.vendedor_id===uid && v.fecha===hoy);
+  const realiz=delDia.filter(v=>v.realizada).length;
+  const ym=PERIODO, ini=primerDia(ym);
+  const finMes=new Date(new Date(ini).getFullYear(), new Date(ini).getMonth()+1, 0);
+  const finStr=finMes.getFullYear()+'-'+String(finMes.getMonth()+1).padStart(2,'0')+'-'+String(finMes.getDate()).padStart(2,'0');
+  const delMes=STATE.visitas.filter(v=>v.vendedor_id===uid && v.fecha>=ini && v.fecha<=finStr && v.realizada);
+  const planMes=STATE.planMensual.filter(p=>p.vendedor_id===uid && String(p.mes).slice(0,7)===ym).reduce((a,p)=>a+p.cantidad,0);
+  const cumpl = planMes ? Math.round(delMes.length/planMes*100) : 0;
+
+  // plan semanal de esta semana
+  const lun=lunesDe(hoy);
+  const semana=STATE.planSemanal.filter(p=>p.vendedor_id===uid && String(p.semana_inicio).slice(0,10)===lun)
+                .sort((a,b)=>String(a.fecha_planeada).localeCompare(String(b.fecha_planeada)));
+
+  let h=`<div class="stats">
+    <div class="stat"><div class="k">Visitas hoy</div><div class="v">${delDia.length}</div><div class="s">${realiz} realizadas</div></div>
+    <div class="stat"><div class="k">Realizadas ${ymLabel(ym)}</div><div class="v">${delMes.length}</div><div class="s">de ${planMes||0} planeadas</div></div>
+    <div class="stat"><div class="k">Cumplimiento plan</div><div class="v" style="color:${cumpl>=90?'var(--ok)':cumpl>=70?'var(--warn)':'var(--bad)'}">${cumpl}%</div><div class="s">del mes</div></div>
+    <div class="stat"><div class="k">Mi cartera</div><div class="v">${misClientes(uid).length}</div><div class="s">clientes activos</div></div>
+  </div>`;
+
+  h+=`<div class="card"><div class="chead"><div class="t"><small>Hoy · ${fmtFecha(hoy)}</small>Visitas del día</div>
+      <button class="act gold sm" data-act="nuevaVisita">+ Registrar visita</button></div><div class="cbody">`;
+  if(!delDia.length) h+=`<div class="empty">Aún no registras visitas hoy.</div>`;
+  else h+=delDia.sort((a,b)=>String(a.hora_inicio||'').localeCompare(String(b.hora_inicio||''))).map(rowVisita).join('');
+  h+=`</div></div>`;
+
+  // plan de la semana
+  h+=`<div class="card"><div class="chead"><div class="t"><small>Semana del ${fmtFecha(lun)}</small>Mi plan semanal</div></div><div class="cbody">`;
+  if(!semana.length) h+=`<div class="empty">Sin plan semanal cargado para esta semana (lo define el coordinador).</div>`;
+  else h+=semana.map(p=>{
+    const c=clienteById(p.cliente_id), t=tipoById(p.tipo_visita_id);
+    const hecha=STATE.visitas.some(v=>v.plan_semanal_id===p.id && v.realizada);
+    return `<div class="trow"><div class="body"><div class="ti ${hecha?'done':''}">${esc(c?c.nombre_comercial:'—')}</div>
+      <div class="meta">${fmtFecha(p.fecha_planeada)} · ${t?`<span class="badge ${t.letra}">${esc(t.nombre)}</span>`:''}</div></div>
+      ${hecha?'<span class="badge est-activo">Realizada</span>':`<button class="act ghost sm" data-act="cerrarPlan" data-id="${p.id}">Registrar</button>`}</div>`;
+  }).join('');
+  h+=`</div></div>`;
+  return h;
+}
+
+function rowVisita(v){
+  const c=clienteById(v.cliente_id), t=tipoById(v.tipo_visita_id), m=marcaById(v.marca_id);
+  const horas=[v.hora_inicio,v.hora_fin].filter(Boolean).map(x=>String(x).slice(0,5)).join('–');
+  let meta=[];
+  if(t) meta.push(`<span class="badge ${t.letra}">${esc(t.nombre)}</span>`);
+  if(m) meta.push(`<span class="badge marca">${esc(m.nombre)}</span>`);
+  if(v.auditoria_tecnica) meta.push(`<span class="badge est-mostrador">Auditoría téc.</span>`);
+  if(horas) meta.push(horas);
+  return `<div class="trow"><div class="body">
+      <div class="ti ${v.realizada?'':'done'}">${esc(c?c.nombre_comercial:'—')}${v.realizada?'':' <span style="color:var(--bad);font-family:Arial;font-size:12px">· No realizada</span>'}</div>
+      <div class="meta">${meta.join(' · ')}</div>
+      ${v.motivo_no_visita?`<div class="de">Motivo: ${esc(v.motivo_no_visita)}</div>`:''}
+      ${v.nota?`<div class="de">${esc(v.nota)}</div>`:''}
+    </div>
+    <div class="rowbtns">
+      <button class="act ghost sm" data-act="editVisita" data-id="${v.id}">Editar</button>
+      <button class="act danger sm" data-act="delVisita" data-id="${v.id}">✕</button>
+    </div></div>`;
+}
+
+/* =====================================================================
+   VISTA: PLAN (mensual + semanal)
+   ===================================================================== */
+function viewPlan(){
+  const soloLectura=esVendedor();
+  const uid = soloLectura ? SESSION.id : (viewPlan._vend || (vendedores()[0]&&vendedores()[0].id));
+  viewPlan._vend=uid;
+  const ym=PERIODO;
+
+  let h='';
+  if(!soloLectura){
+    h+=`<div class="card"><div class="cpad filtbar">Vendedor:
+      <select id="planVend">${vendedores().map(v=>`<option value="${v.id}" ${v.id===uid?'selected':''}>${esc(v.nombre)}</option>`).join('')}</select>
+      <span style="margin-left:auto"></span>
+      <button class="act sm" data-act="nuevoPlanM" data-vend="${uid}">+ Renglón plan mensual</button>
+    </div></div>`;
+  }
+
+  const planM=STATE.planMensual.filter(p=>p.vendedor_id===uid && String(p.mes).slice(0,7)===ym)
+    .sort((a,b)=>{ const ca=clienteById(a.cliente_id), cb=clienteById(b.cliente_id); return (ca?ca.nombre_comercial:'').localeCompare(cb?cb.nombre_comercial:''); });
+
+  h+=`<div class="card"><div class="chead"><div class="t"><small>${ymLabel(ym)} · ${esc(usuarioNombre(uid))}</small>Plan mensual por cliente</div></div>
+    <div class="tblwrap"><table class="grid"><thead><tr><th>Cliente</th><th>Tipo</th><th>Cantidad</th><th>Realizadas</th>${soloLectura?'':'<th></th>'}</tr></thead><tbody>`;
+  if(!planM.length) h+=`<tr><td colspan="${soloLectura?4:5}"><div class="empty" style="padding:8px 0">Sin plan cargado para este mes.</div></td></tr>`;
+  else h+=planM.map(p=>{
+    const c=clienteById(p.cliente_id), t=tipoById(p.tipo_visita_id);
+    const ini=primerDia(ym); const f=new Date(ini); const fin=new Date(f.getFullYear(),f.getMonth()+1,0);
+    const finStr=fin.getFullYear()+'-'+String(fin.getMonth()+1).padStart(2,'0')+'-'+String(fin.getDate()).padStart(2,'0');
+    const hechas=STATE.visitas.filter(v=>v.vendedor_id===uid && v.cliente_id===p.cliente_id && v.tipo_visita_id===p.tipo_visita_id && v.realizada && v.fecha>=ini && v.fecha<=finStr).length;
+    return `<tr><td><span class="nm">${esc(c?c.nombre_comercial:'—')}</span></td>
+      <td>${t?`<span class="badge ${t.letra}">${esc(t.nombre)}</span>`:'—'}</td>
+      <td>${p.cantidad}</td>
+      <td><b style="color:${hechas>=p.cantidad?'var(--ok)':'var(--warn)'}">${hechas}</b></td>
+      ${soloLectura?'':`<td><div class="rowbtns"><button class="act ghost sm" data-act="editPlanM" data-id="${p.id}">Editar</button><button class="act danger sm" data-act="delPlanM" data-id="${p.id}">✕</button></div></td>`}</tr>`;
+  }).join('');
+  h+=`</tbody></table></div></div>`;
+
+  // Plan semanal
+  const lun=lunesDe(hoyStr());
+  const semana=STATE.planSemanal.filter(p=>p.vendedor_id===uid && String(p.semana_inicio).slice(0,10)===lun)
+                .sort((a,b)=>String(a.fecha_planeada).localeCompare(String(b.fecha_planeada)));
+  h+=`<div class="card"><div class="chead"><div class="t"><small>Semana del ${fmtFecha(lun)}</small>Plan semanal</div>
+    ${soloLectura?'':`<button class="act gold sm" data-act="nuevoPlanS" data-vend="${uid}">+ Cita semanal</button>`}</div><div class="cbody">`;
+  if(!semana.length) h+=`<div class="empty">Sin citas planeadas esta semana.</div>`;
+  else h+=semana.map(p=>{
+    const c=clienteById(p.cliente_id), t=tipoById(p.tipo_visita_id);
+    return `<div class="trow"><div class="body"><div class="ti">${esc(c?c.nombre_comercial:'—')}</div>
+      <div class="meta">${fmtFecha(p.fecha_planeada)} · ${t?`<span class="badge ${t.letra}">${esc(t.nombre)}</span>`:''}</div></div>
+      ${soloLectura?'':`<button class="act danger sm" data-act="delPlanS" data-id="${p.id}">✕</button>`}</div>`;
+  }).join('');
+  h+=`</div></div>`;
+  return h;
+}
+viewPlan._after=function(){
+  const s=document.getElementById('planVend');
+  if(s) s.addEventListener('change',e=>{ viewPlan._vend=e.target.value; render(); });
+};
+
+/* =====================================================================
+   VISTA: CLIENTES / CARTERA
+   ===================================================================== */
+function viewClientes(){
+  const soloMios=esVendedor();
+  const fVend=viewClientes._vend||'', fEst=viewClientes._est||'', fTxt=(viewClientes._txt||'').toLowerCase();
+  let lista=STATE.clientes.slice();
+  if(soloMios) lista=lista.filter(c=>c.vendedor_id===SESSION.id);
+  if(fVend) lista=lista.filter(c=>c.vendedor_id===fVend);
+  if(fEst) lista=lista.filter(c=>c.estatus===fEst);
+  if(fTxt) lista=lista.filter(c=>(c.nombre_comercial+' '+(c.razon_social||'')+' '+(c.codigo||'')).toLowerCase().includes(fTxt));
+
+  const puedeEditar = puedeCoord()||puedeAdmin();
+  let h=`<div class="card"><div class="cpad filtbar">
+      <input id="cliTxt" placeholder="Buscar nombre / código…" value="${esc(viewClientes._txt||'')}" style="min-width:200px">
+      ${soloMios?'':`<select id="cliVend"><option value="">Todos los vendedores</option>${vendedores().map(v=>`<option value="${v.id}" ${v.id===fVend?'selected':''}>${esc(v.nombre)}</option>`).join('')}</select>`}
+      <select id="cliEst"><option value="">Todo estatus</option>${['activo','inactivo','mostrador'].map(e=>`<option value="${e}" ${e===fEst?'selected':''}>${e}</option>`).join('')}</select>
+      <span style="margin-left:auto;color:var(--muted)">${lista.length} clientes</span>
+      ${puedeEditar?`<button class="act sm" data-act="nuevoCliente">+ Cliente</button>`:''}
+    </div></div>`;
+
+  h+=`<div class="card"><div class="tblwrap"><table class="grid"><thead><tr><th>Cód.</th><th>Cliente</th><th>Razón social</th><th>Vendedor</th><th>Estatus</th><th>Alta</th>${puedeEditar?'<th></th>':''}</tr></thead><tbody>`;
+  if(!lista.length) h+=`<tr><td colspan="7"><div class="empty" style="padding:8px 0">Sin resultados.</div></td></tr>`;
+  else h+=lista.map(c=>`<tr>
+      <td>${esc(c.codigo||'')}</td>
+      <td><span class="nm">${esc(c.nombre_comercial)}</span></td>
+      <td style="color:var(--muted)">${esc(c.razon_social||'')}</td>
+      <td>${esc(usuarioNombre(c.vendedor_id))}</td>
+      <td><span class="badge est-${c.estatus}">${c.estatus}</span></td>
+      <td style="color:var(--muted)">${fmtFecha(c.fecha_alta)}</td>
+      ${puedeEditar?`<td><div class="rowbtns"><button class="act ghost sm" data-act="editCliente" data-id="${c.id}">Editar</button></div></td>`:''}
+    </tr>`).join('');
+  h+=`</tbody></table></div></div>`;
+  return h;
+}
+viewClientes._after=function(){
+  const t=document.getElementById('cliTxt'); if(t) t.addEventListener('input',e=>{ viewClientes._txt=e.target.value; const p=t.selectionStart; render(); const n=document.getElementById('cliTxt'); if(n){n.focus();n.setSelectionRange(p,p);} });
+  const v=document.getElementById('cliVend'); if(v) v.addEventListener('change',e=>{ viewClientes._vend=e.target.value; render(); });
+  const e2=document.getElementById('cliEst'); if(e2) e2.addEventListener('change',e=>{ viewClientes._est=e.target.value; render(); });
+};
+
+/* =====================================================================
+   VISTA: PROSPECTOS (FO-VTAS-08 / 11)
+   ===================================================================== */
+function viewProspectos(){
+  const soloMios=esVendedor();
+  let lista=STATE.prospectos.filter(p=>p.activo);
+  if(soloMios) lista=lista.filter(p=>p.vendedor_id===SESSION.id);
+  const tipos={prospecto:'Prospecto',inactivo:'Inactivo',seguimiento:'Seguimiento',nuevo:'Nuevo'};
+
+  let h=`<div class="card"><div class="chead"><div class="t"><small>FO-VTAS-08 / 11</small>Prospectos y seguimiento</div>
+    <button class="act gold sm" data-act="nuevoProsp">+ Prospecto</button></div><div class="cbody">`;
+  if(!lista.length) h+=`<div class="empty">Sin prospectos registrados.</div>`;
+  else{
+    Object.keys(tipos).forEach(tp=>{
+      const g=lista.filter(p=>p.tipo===tp);
+      if(!g.length) return;
+      h+=`<div class="sechead">${tipos[tp]} · ${g.length}</div>`;
+      h+=g.map(p=>{
+        const logs=STATE.prospLog.filter(l=>l.prospecto_id===p.id).sort((a,b)=>String(b.fecha).localeCompare(String(a.fecha)));
+        const ult=logs[0];
+        return `<div class="trow"><div class="body">
+          <div class="ti">${esc(p.nombre)} ${p.contacto?`<span style="font-family:Arial;font-size:12px;color:var(--muted)">· ${esc(p.contacto)}</span>`:''}</div>
+          <div class="meta">${esc(usuarioNombre(p.vendedor_id))} · Avance ${p.avance_pct}%${ult?` · Últ: ${fmtFecha(ult.fecha)} ${esc(ult.observacion)}`:''}</div>
+        </div>
+        <div class="rowbtns">
+          <button class="act ghost sm" data-act="logProsp" data-id="${p.id}">+ Nota</button>
+          <button class="act ghost sm" data-act="editProsp" data-id="${p.id}">Editar</button>
+        </div></div>`;
+      }).join('');
+    });
+  }
+  h+=`</div></div>`;
+  return h;
+}
+
+/* =====================================================================
+   VISTA: MÁS BUSCADOS
+   ===================================================================== */
+function viewBuscados(){
+  const puedeEditar=puedeCoord();
+  let h=`<div class="card"><div class="chead"><div class="t"><small>Grupos objetivo</small>Clientes más buscados</div>
+    ${puedeEditar?`<button class="act gold sm" data-act="nuevoGrupo">+ Grupo</button>`:''}</div><div class="cbody">`;
+  const grupos=STATE.grupos.filter(g=>g.estatus!=='archivado');
+  if(!grupos.length) h+=`<div class="empty">Sin grupos activos.</div>`;
+  else h+=grupos.map(g=>{
+    const det=STATE.gruposDet.filter(d=>d.grupo_id===g.id);
+    const chips=det.map(d=>{
+      if(d.cliente_id){ const c=clienteById(d.cliente_id); return `<span class="chipmini">${esc(c?c.nombre_comercial:'#'+d.cliente_id)}</span>`; }
+      return `<span class="chipmini libre">${esc(d.nombre_libre)}</span>`;
+    }).join('');
+    return `<div class="trow"><div class="body">
+      <div class="ti">${esc(g.nombre)} <span class="badge est-${g.estatus==='activo'?'activo':'mostrador'}">${g.estatus}</span></div>
+      <div class="meta">${fmtFecha(g.fecha_inicio)} – ${fmtFecha(g.fecha_fin)}${g.meta?` · ${esc(g.meta)}`:''}</div>
+      <div style="margin-top:6px">${chips||'<span style="color:var(--muted);font-family:Arial;font-size:12px">sin objetivos</span>'}</div>
+    </div>
+    ${puedeEditar?`<div class="rowbtns"><button class="act ghost sm" data-act="addTarget" data-id="${g.id}">+ Objetivo</button><button class="act ghost sm" data-act="editGrupo" data-id="${g.id}">Editar</button></div>`:''}
+    </div>`;
+  }).join('');
+  h+=`</div></div>`;
+  return h;
+}
+
+/* =====================================================================
+   VISTA: TABLERO (coordinador)
+   ===================================================================== */
+function viewTablero(){
+  const ym=PERIODO, ini=primerDia(ym);
+  const f=new Date(ini), fin=new Date(f.getFullYear(),f.getMonth()+1,0);
+  const finStr=fin.getFullYear()+'-'+String(fin.getMonth()+1).padStart(2,'0')+'-'+String(fin.getDate()).padStart(2,'0');
+  const vends=vendedores();
+
+  let h=`<div class="stats">
+    <div class="stat"><div class="k">Clientes totales</div><div class="v">${STATE.clientes.length}</div><div class="s">${STATE.clientes.filter(c=>c.estatus==='activo').length} activos</div></div>
+    <div class="stat"><div class="k">Visitas ${ymLabel(ym)}</div><div class="v">${STATE.visitas.filter(v=>v.fecha>=ini&&v.fecha<=finStr&&v.realizada).length}</div><div class="s">realizadas</div></div>
+    <div class="stat"><div class="k">Prospectos</div><div class="v">${STATE.prospectos.filter(p=>p.activo).length}</div><div class="s">en pipeline</div></div>
+    <div class="stat"><div class="k">Más buscados</div><div class="v">${STATE.gruposDet.length}</div><div class="s">objetivos activos</div></div>
+  </div>`;
+
+  h+=`<div class="card"><div class="chead"><div class="t"><small>${ymLabel(ym)}</small>Cumplimiento por vendedor</div></div>
+    <div class="tblwrap"><table class="grid"><thead><tr><th>Vendedor</th><th>Cartera</th><th>Plan mes</th><th>Realizadas</th><th>Cumplimiento</th></tr></thead><tbody>`;
+  h+=vends.map(v=>{
+    const cart=STATE.clientes.filter(c=>c.vendedor_id===v.id && c.estatus!=='inactivo').length;
+    const plan=STATE.planMensual.filter(p=>p.vendedor_id===v.id && String(p.mes).slice(0,7)===ym).reduce((a,p)=>a+p.cantidad,0);
+    const real=STATE.visitas.filter(x=>x.vendedor_id===v.id && x.realizada && x.fecha>=ini && x.fecha<=finStr).length;
+    const pct=plan?Math.round(real/plan*100):0;
+    return `<tr><td><span class="nm">${esc(v.nombre)}</span></td><td>${cart}</td><td>${plan}</td><td>${real}</td>
+      <td class="pct" style="color:${pct>=90?'var(--ok)':pct>=70?'var(--warn)':'var(--bad)'}">${plan?pct+'%':'—'}</td></tr>`;
+  }).join('');
+  h+=`</tbody></table></div></div>`;
+  return h;
+}
+
+/* =====================================================================
+   VISTA: COMPRAS (admin)
+   ===================================================================== */
+function viewCompras(){
+  const ym=PERIODO, mes=primerDia(ym);
+  const fVend=viewCompras._vend||'';
+  let lista=STATE.clientes.filter(c=>c.estatus!=='inactivo');
+  if(fVend) lista=lista.filter(c=>c.vendedor_id===fVend);
+  const mapa={}; STATE.compras.filter(c=>String(c.mes).slice(0,10)===mes).forEach(c=>mapa[c.cliente_id]=c);
+
+  let h=`<div class="card"><div class="cpad filtbar">
+      <b style="font-family:Georgia;color:var(--green)">Compras ${ymLabel(ym)}</b>
+      <select id="compVend"><option value="">Todos los vendedores</option>${vendedores().map(v=>`<option value="${v.id}" ${v.id===fVend?'selected':''}>${esc(v.nombre)}</option>`).join('')}</select>
+      <span style="margin-left:auto"></span>
+      <button class="act gold sm" data-act="guardarCompras" data-mes="${mes}">Guardar mes</button>
+    </div></div>`;
+
+  h+=`<div class="card"><div class="tblwrap"><table class="grid"><thead><tr><th>Cliente</th><th>Vendedor</th><th>¿Compró?</th><th>Monto</th></tr></thead><tbody>`;
+  h+=lista.map(c=>{
+    const r=mapa[c.id]||{};
+    return `<tr data-cli="${c.id}">
+      <td><span class="nm">${esc(c.nombre_comercial)}</span></td>
+      <td style="color:var(--muted)">${esc(usuarioNombre(c.vendedor_id))}</td>
+      <td><input type="checkbox" class="chk compro" ${r.compro?'checked':''} style="width:20px;height:20px;accent-color:var(--green)"></td>
+      <td><input type="number" class="monto" value="${r.monto!=null?Number(r.monto):''}" placeholder="0" min="0" step="1"></td>
+    </tr>`;
+  }).join('');
+  h+=`</tbody></table></div></div>`;
+  return h;
+}
+viewCompras._after=function(){
+  const s=document.getElementById('compVend'); if(s) s.addEventListener('change',e=>{ viewCompras._vend=e.target.value; render(); });
+};
+
+/* =====================================================================
+   VISTA: CORTES TRIMESTRALES (coordinador / dirección)
+   ===================================================================== */
+function viewCortes(){
+  const trim=trimestreDe(PERIODO);
+  const meses=mesesTrimestre(trim);
+  const umbralReasig=cfgNum('umbral_reasignacion',3000);
+  const umbralMost=cfgNum('umbral_mostrador',1000);
+
+  // candidatos calculados
+  const candidatos=[];
+  STATE.clientes.filter(c=>c.estatus==='activo').forEach(c=>{
+    // requiere 3 meses de historia desde alta
+    const altaOk = !c.fecha_alta || c.fecha_alta <= meses[0];
+    if(!altaOk) return;
+    const montos=meses.map(m=>{ const r=STATE.compras.find(x=>x.cliente_id===c.id && String(x.mes).slice(0,10)===m); return r?{compro:r.compro,monto:Number(r.monto||0)}:null; });
+    const hayDatos=montos.some(x=>x!==null);
+    if(!hayDatos) return;
+    const sinCompra=montos.every(x=>!x || !x.compro || x.monto===0);
+    if(sinCompra){ candidatos.push({cliente:c,tipo:'sin_compra',detalle:'Sin compra el trimestre'}); return; }
+    const todosBajos=(lim)=>montos.every(x=>x && x.monto<lim);
+    if(c.vendedor_id==='jair' && todosBajos(umbralReasig)) candidatos.push({cliente:c,tipo:'jair_a_jose',detalle:'3 meses < '+money(umbralReasig)});
+    else if(c.vendedor_id==='jose' && todosBajos(umbralMost)) candidatos.push({cliente:c,tipo:'jose_a_mostrador',detalle:'3 meses < '+money(umbralMost)});
+  });
+
+  const tipoLabel={jair_a_jose:'Jair → José',jose_a_mostrador:'José → Mostrador',sin_compra:'Sin compra'};
+  const puedeDecidir=esDireccion()||puedeCoord();
+
+  let h=`<div class="card"><div class="chead"><div class="t"><small>Junta macro</small>Cortes trimestrales · ${trim}</div></div>
+    <div class="cpad" style="font-family:Arial;font-size:12px;color:var(--muted)">
+      Umbral reasignación <b>${money(umbralReasig)}</b> · Umbral mostrador <b>${money(umbralMost)}</b>.
+      Candidatos calculados con las compras de ${meses.map(m=>ymLabel(m.slice(0,7))).join(', ')}.
+    </div></div>`;
+
+  h+=`<div class="card"><div class="tblwrap"><table class="grid"><thead><tr><th>Cliente</th><th>Vendedor</th><th>Candidato</th><th>Motivo</th><th>Decisión</th>${puedeDecidir?'<th></th>':''}</tr></thead><tbody>`;
+  if(!candidatos.length) h+=`<tr><td colspan="6"><div class="empty" style="padding:8px 0">Sin candidatos con los datos de compras cargados.</div></td></tr>`;
+  else h+=candidatos.map(k=>{
+    const corte=STATE.cortes.find(x=>x.trimestre===trim && x.cliente_id===k.cliente.id);
+    const dec=corte&&corte.decision;
+    return `<tr><td><span class="nm">${esc(k.cliente.nombre_comercial)}</span></td>
+      <td style="color:var(--muted)">${esc(usuarioNombre(k.cliente.vendedor_id))}</td>
+      <td><span class="badge est-mostrador">${tipoLabel[k.tipo]}</span></td>
+      <td style="color:var(--muted)">${esc(k.detalle)}</td>
+      <td>${dec?`<span class="badge est-${dec==='mover'?'activo':dec==='inactivar'?'inactivo':'mostrador'}">${dec}</span>`:'<span style="color:var(--muted)">pendiente</span>'}</td>
+      ${puedeDecidir?`<td><button class="act ghost sm" data-act="decidirCorte" data-cli="${k.cliente.id}" data-tipo="${k.tipo}" data-trim="${trim}">Decidir</button></td>`:''}</tr>`;
+  }).join('');
+  h+=`</tbody></table></div></div>`;
+  return h;
+}
+
+/* =====================================================================
+   VISTA: CATÁLOGOS (admin) — tipos de visita + marcas
+   ===================================================================== */
+function viewCatalogos(){
+  const bloque=(titulo,tabla,items,act)=>`
+    <div class="card"><div class="chead"><div class="t">${titulo}</div>
+      <button class="act sm" data-act="${act.nuevo}">+ Agregar</button></div>
+      <div class="tblwrap"><table class="grid"><thead><tr><th>Nombre</th><th>Letra</th><th>Color</th><th>Activo</th><th></th></tr></thead><tbody>
+      ${items.map(x=>`<tr><td><span class="nm">${esc(x.nombre)}</span></td><td>${esc(x.letra)}</td>
+        <td><span class="swatch" style="background:${esc(x.color)}"></span>${esc(x.color)}</td>
+        <td><span class="badge est-${x.activo?'activo':'inactivo'}">${x.activo?'sí':'no'}</span></td>
+        <td><button class="act ghost sm" data-act="${act.edit}" data-id="${x.id}">Editar</button></td></tr>`).join('')}
+      </tbody></table></div></div>`;
+  return bloque('Tipos de visita','gvis_tipos_visita',STATE.tipos,{nuevo:'nuevoTipo',edit:'editTipo'})
+       + bloque('Marcas','gvis_marcas',STATE.marcas,{nuevo:'nuevaMarca',edit:'editMarca'});
+}
+
+/* =====================================================================
+   VISTA: UMBRALES / CONFIG (admin)
+   ===================================================================== */
+function viewConfig(){
+  const desc={umbral_reasignacion:'Compra mensual menor a este monto 3 meses seguidos: candidato Jair → José',
+              umbral_mostrador:'Compra mensual menor a este monto: candidato José → Mostrador',
+              min_visitas_mes:'Visitas mínimas por cliente activo al mes'};
+  let h=`<div class="card"><div class="chead"><div class="t"><small>Editables</small>Umbrales del sistema</div></div>
+    <div class="tblwrap"><table class="grid"><thead><tr><th>Parámetro</th><th>Descripción</th><th>Valor</th><th></th></tr></thead><tbody>`;
+  Object.keys(STATE.config).forEach(k=>{
+    h+=`<tr><td><span class="nm">${esc(k)}</span></td><td style="color:var(--muted)">${esc(desc[k]||'')}</td>
+      <td><input type="text" id="cfg_${k}" value="${esc(STATE.config[k])}" style="width:130px"></td>
+      <td><button class="act sm" data-act="guardarCfg" data-clave="${k}">Guardar</button></td></tr>`;
+  });
+  h+=`</tbody></table></div></div>`;
+  return h;
+}
+
+/* =====================================================================
+   VISTA: USUARIOS (admin) — solo lectura (PINs se manejan en Supabase)
+   ===================================================================== */
+function viewUsuarios(){
+  let h=`<div class="card"><div class="chead"><div class="t"><small>Alta / edición</small>Usuarios del sistema</div>
+    <button class="act gold sm" data-act="nuevoUsuario">+ Usuario</button></div>
+    <div class="cpad" style="font-family:Arial;font-size:12px;color:var(--muted)">El <b>PIN nunca se muestra ni se edita aquí</b>. Los usuarios nuevos entran con PIN <code>0000</code> y quedan pendientes de que Dirección lo asigne en Supabase.</div>
+    <div class="tblwrap"><table class="grid"><thead><tr><th>ID</th><th>Nombre</th><th>Rol</th><th>Activo</th><th></th></tr></thead><tbody>`;
+  h+=STATE.usuarios.slice().sort((a,b)=>Number(b.activo)-Number(a.activo)||a.nombre.localeCompare(b.nombre)).map(u=>`<tr style="${u.activo?'':'opacity:.55'}">
+    <td>${esc(u.id)}</td><td><span class="nm">${esc(u.nombre)}</span></td>
+    <td><span class="pill2">${rolLabel(u.rol)}</span></td>
+    <td><span class="badge est-${u.activo?'activo':'inactivo'}">${u.activo?'activo':'inactivo'}</span></td>
+    <td><div class="rowbtns">
+      <button class="act ghost sm" data-act="editUsuario" data-id="${esc(u.id)}">Editar</button>
+      <button class="act ${u.activo?'danger':'ghost'} sm" data-act="toggleUsuario" data-id="${esc(u.id)}">${u.activo?'Desactivar':'Activar'}</button>
+    </div></td></tr>`).join('');
+  h+=`</tbody></table></div></div>`;
+  return h;
+}
+
+/* =====================================================================
+   VISTA: CONSOLIDADO (dirección)
+   ===================================================================== */
+function viewConsolidado(){
+  const ym=PERIODO, ini=primerDia(ym);
+  const f=new Date(ini), fin=new Date(f.getFullYear(),f.getMonth()+1,0);
+  const finStr=fin.getFullYear()+'-'+String(fin.getMonth()+1).padStart(2,'0')+'-'+String(fin.getDate()).padStart(2,'0');
+  const comprasMes=STATE.compras.filter(c=>String(c.mes).slice(0,10)===ini);
+  const totalCompra=comprasMes.reduce((a,c)=>a+Number(c.monto||0),0);
+
+  let h=`<div class="stats">
+    <div class="stat"><div class="k">Cartera total</div><div class="v">${STATE.clientes.length}</div><div class="s">${STATE.clientes.filter(c=>c.estatus==='activo').length} activos · ${STATE.clientes.filter(c=>c.estatus==='mostrador').length} mostrador</div></div>
+    <div class="stat"><div class="k">Visitas ${ymLabel(ym)}</div><div class="v">${STATE.visitas.filter(v=>v.fecha>=ini&&v.fecha<=finStr&&v.realizada).length}</div><div class="s">realizadas</div></div>
+    <div class="stat"><div class="k">Compra del mes</div><div class="v" style="font-size:26px">${money(totalCompra)}</div><div class="s">${comprasMes.filter(c=>c.compro).length} clientes compraron</div></div>
+    <div class="stat"><div class="k">Prospectos</div><div class="v">${STATE.prospectos.filter(p=>p.activo).length}</div><div class="s">en pipeline</div></div>
+  </div>`;
+
+  h+=`<div class="card"><div class="chead"><div class="t"><small>${ymLabel(ym)}</small>Resumen por vendedor</div></div>
+    <div class="tblwrap"><table class="grid"><thead><tr><th>Vendedor</th><th>Cartera</th><th>Visitas</th><th>Compra mes</th><th>Prospectos</th></tr></thead><tbody>`;
+  h+=vendedores().map(v=>{
+    const cart=STATE.clientes.filter(c=>c.vendedor_id===v.id && c.estatus!=='inactivo').length;
+    const vis=STATE.visitas.filter(x=>x.vendedor_id===v.id && x.realizada && x.fecha>=ini && x.fecha<=finStr).length;
+    const compra=comprasMes.filter(c=>{ const cl=clienteById(c.cliente_id); return cl&&cl.vendedor_id===v.id; }).reduce((a,c)=>a+Number(c.monto||0),0);
+    const pros=STATE.prospectos.filter(p=>p.activo && p.vendedor_id===v.id).length;
+    return `<tr><td><span class="nm">${esc(v.nombre)}</span></td><td>${cart}</td><td>${vis}</td><td>${money(compra)}</td><td>${pros}</td></tr>`;
+  }).join('');
+  h+=`</tbody></table></div></div>`;
+  return h;
+}
+
+/* =====================================================================
+   MODAL genérico
+   ===================================================================== */
+function openModal(html){ document.getElementById('modalBox').innerHTML=html; document.getElementById('modalWrap').classList.remove('hidden'); }
+function closeModal(){ document.getElementById('modalWrap').classList.add('hidden'); }
+document.getElementById('modalWrap').addEventListener('click',e=>{ if(e.target.id==='modalWrap') closeModal(); });
+function fldSelect(id,label,opts,sel){ return `<div class="fld"><label>${label}</label><select id="${id}">${opts.map(o=>`<option value="${o[0]}" ${String(o[0])===String(sel)?'selected':''}>${esc(o[1])}</option>`).join('')}</select></div>`; }
+function optClientes(uid){ return STATE.clientes.filter(c=>(!uid||c.vendedor_id===uid)&&c.estatus!=='inactivo').map(c=>[c.id,c.nombre_comercial]); }
+function optTipos(){ return STATE.tipos.filter(t=>t.activo).map(t=>[t.id,t.nombre]); }
+function optMarcas(){ return [['','—']].concat(STATE.marcas.filter(m=>m.activo).map(m=>[m.id,m.nombre])); }
+
+async function save(tabla,payload,ondone){
+  try{
+    let q;
+    if(payload.id){ const id=payload.id; delete payload.id; q=db.from(tabla).update(payload).eq('id',id); }
+    else q=db.from(tabla).insert(payload);
+    const {error}=await q; if(error) throw error;
+    closeModal(); toast('Guardado.','ok'); await reload(); ondone&&ondone();
+  }catch(err){ console.error(err); toast('Error: '+(err.message||err),'err'); }
+}
+async function remove(tabla,id,msg){
+  if(!confirm(msg||'¿Eliminar este registro?')) return;
+  try{ const {error}=await db.from(tabla).delete().eq('id',id); if(error) throw error; toast('Eliminado.','ok'); await reload(); }
+  catch(err){ console.error(err); toast('Error: '+(err.message||err),'err'); }
+}
+function val(id){ const e=document.getElementById(id); return e?e.value.trim():''; }
+function chk(id){ const e=document.getElementById(id); return e?e.checked:false; }
+
+/* =====================================================================
+   ACCIONES (data-act)
+   ===================================================================== */
+const ACTIONS={
+  /* ---- VISITAS ---- */
+  nuevaVisita(){ visitaModal(null); },
+  editVisita(d){ visitaModal(STATE.visitas.find(v=>v.id==d.id)); },
+  delVisita(d){ remove('gvis_visitas',d.id,'¿Eliminar esta visita?'); },
+  cerrarPlan(d){ const p=STATE.planSemanal.find(x=>x.id==d.id); visitaModal(null,p); },
+
+  /* ---- PLAN ---- */
+  nuevoPlanM(d){ planMModal(null,d.vend); },
+  editPlanM(d){ planMModal(STATE.planMensual.find(p=>p.id==d.id)); },
+  delPlanM(d){ remove('gvis_plan_mensual',d.id,'¿Eliminar renglón del plan mensual?'); },
+  nuevoPlanS(d){ planSModal(d.vend); },
+  delPlanS(d){ remove('gvis_plan_semanal',d.id,'¿Eliminar cita semanal?'); },
+
+  /* ---- CLIENTES ---- */
+  nuevoCliente(){ clienteModal(null); },
+  editCliente(d){ clienteModal(clienteById(Number(d.id))); },
+
+  /* ---- PROSPECTOS ---- */
+  nuevoProsp(){ prospModal(null); },
+  editProsp(d){ prospModal(STATE.prospectos.find(p=>p.id==d.id)); },
+  logProsp(d){ prospLogModal(Number(d.id)); },
+
+  /* ---- BUSCADOS ---- */
+  nuevoGrupo(){ grupoModal(null); },
+  editGrupo(d){ grupoModal(STATE.grupos.find(g=>g.id==d.id)); },
+  addTarget(d){ targetModal(Number(d.id)); },
+
+  /* ---- COMPRAS ---- */
+  async guardarCompras(d){
+    const rows=[...document.querySelectorAll('tr[data-cli]')].map(tr=>({
+      cliente_id:Number(tr.dataset.cli), mes:d.mes,
+      compro:tr.querySelector('.compro').checked,
+      monto:Number(tr.querySelector('.monto').value||0),
+      capturado_por:SESSION.id
+    }));
+    try{ const {error}=await db.from('gvis_compras_mensuales').upsert(rows,{onConflict:'cliente_id,mes'}); if(error) throw error;
+      toast('Compras guardadas.','ok'); await reload(); }
+    catch(err){ console.error(err); toast('Error: '+(err.message||err),'err'); }
+  },
+
+  /* ---- CORTES ---- */
+  decidirCorte(d){ corteModal(d); },
+
+  /* ---- CATÁLOGOS ---- */
+  nuevoTipo(){ catModal('gvis_tipos_visita',null,'Tipo de visita'); },
+  editTipo(d){ catModal('gvis_tipos_visita',STATE.tipos.find(x=>x.id==d.id),'Tipo de visita'); },
+  nuevaMarca(){ catModal('gvis_marcas',null,'Marca'); },
+  editMarca(d){ catModal('gvis_marcas',STATE.marcas.find(x=>x.id==d.id),'Marca'); },
+
+  /* ---- CONFIG ---- */
+  async guardarCfg(d){
+    const valor=val('cfg_'+d.clave);
+    try{ const {error}=await db.from('gvis_config').update({valor}).eq('clave',d.clave); if(error) throw error;
+      toast('Umbral actualizado.','ok'); await reload(); }
+    catch(err){ console.error(err); toast('Error: '+(err.message||err),'err'); }
+  },
+
+  /* ---- USUARIOS ---- */
+  nuevoUsuario(){ usuarioModal(null); },
+  editUsuario(d){ usuarioModal(STATE.usuarios.find(u=>u.id===d.id)); },
+  async toggleUsuario(d){
+    const u=STATE.usuarios.find(x=>x.id===d.id); if(!u) return;
+    if(u.activo && !confirm('¿Desactivar a '+u.nombre+'? No podrá iniciar sesión.')) return;
+    await userUpsert({p_id:u.id,p_nombre:u.nombre,p_rol:u.rol,p_activo:!u.activo});
+  }
+};
+
+async function userUpsert(args){
+  try{ const {error}=await db.rpc('gvis_user_upsert',args); if(error) throw error;
+    closeModal(); toast('Usuario guardado.','ok'); await reload(); }
+  catch(err){ console.error(err); toast('Error: '+(err.message||err),'err'); }
+}
+function usuarioModal(u){
+  const esNuevo=!u;
+  openModal(`<h3>${esNuevo?'Nuevo':'Editar'} usuario</h3>
+    ${esNuevo
+      ? `<div class="fld"><label>ID / usuario (corto, sin espacios)</label><input type="text" id="uId" placeholder="ej: mario" autocomplete="off"></div>`
+      : `<div class="fld"><label>ID / usuario</label><input type="text" value="${esc(u.id)}" disabled style="background:#f4f1ea;color:var(--muted)"></div>`}
+    <div class="fld"><label>Nombre</label><input type="text" id="uNom" value="${u?esc(u.nombre):''}"></div>
+    ${fldSelect('uRol','Rol',[['vendedor','Vendedor'],['coordinador','Coordinador'],['admin','Admin'],['direccion','Dirección']],u?u.rol:'vendedor')}
+    ${!esNuevo?`<div class="fld chkline"><input type="checkbox" id="uAct" ${u.activo?'checked':''}><label>Activo</label></div>`:''}
+    <div class="cpad" style="padding:12px 14px;background:rgba(201,169,97,.12);border:1px solid var(--line);border-radius:9px;font-family:Arial;font-size:12px;color:#8a6f16;margin-bottom:4px">
+      🔒 <b>PIN pendiente</b> — Dirección lo asigna en Supabase. El PIN nunca se muestra ni se edita desde la app${esNuevo?'; el usuario entra con <code>0000</code>':''}.
+    </div>
+    <div class="mbtns"><button class="act ghost" onclick="closeModal()">Cancelar</button><button class="act gold" id="uSave">Guardar</button></div>`);
+  document.getElementById('uSave').addEventListener('click',()=>{
+    const id=esNuevo?val('uId').toLowerCase().replace(/\s+/g,''):u.id;
+    const nom=val('uNom');
+    if(!id){ toast('Escribe un ID de usuario.','err'); return; }
+    if(!nom){ toast('Falta el nombre.','err'); return; }
+    if(esNuevo && STATE.usuarios.some(x=>x.id===id)){ toast('Ya existe un usuario con ese ID.','err'); return; }
+    userUpsert({ p_id:id, p_nombre:nom, p_rol:val('uRol'), p_activo:esNuevo?true:chk('uAct') });
+  });
+}
+
+/* ---------------- MODALES concretos ---------------- */
+function visitaModal(v,plan){
+  const uid=SESSION.id;
+  const cliSel=v?v.cliente_id:(plan?plan.cliente_id:'');
+  const tipoSel=v?v.tipo_visita_id:(plan?plan.tipo_visita_id:'');
+  openModal(`<h3>${v?'Editar':'Registrar'} visita</h3>
+    <p class="mp">${plan?'Cierre de cita planeada.':'Captura de campo.'}</p>
+    ${fldSelect('vCli','Cliente',optClientes(uid),cliSel)}
+    <div class="fld2">${fldSelect('vTipo','Tipo',optTipos(),tipoSel)}${fldSelect('vMarca','Marca',optMarcas(),v?v.marca_id:'')}</div>
+    <div class="fld2">
+      <div class="fld"><label>Hora inicio</label><input type="time" id="vHi" value="${v&&v.hora_inicio?String(v.hora_inicio).slice(0,5):''}"></div>
+      <div class="fld"><label>Hora fin</label><input type="time" id="vHf" value="${v&&v.hora_fin?String(v.hora_fin).slice(0,5):''}"></div>
+    </div>
+    <div class="fld chkline"><input type="checkbox" id="vAud" ${v&&v.auditoria_tecnica?'checked':''}><label>Auditoría técnica</label></div>
+    <div class="fld chkline"><input type="checkbox" id="vReal" ${!v||v.realizada?'checked':''}><label>Visita realizada</label></div>
+    <div class="fld" id="vMotWrap" style="display:${v&&!v.realizada?'block':'none'}"><label>Motivo (si no se realizó)</label><input type="text" id="vMot" value="${v?esc(v.motivo_no_visita||''):''}"></div>
+    <div class="fld"><label>Nota</label><textarea id="vNota">${v?esc(v.nota||''):''}</textarea></div>
+    <div class="mbtns"><button class="act ghost" onclick="closeModal()">Cancelar</button><button class="act gold" id="vSave">Guardar</button></div>`);
+  document.getElementById('vReal').addEventListener('change',e=>{ document.getElementById('vMotWrap').style.display=e.target.checked?'none':'block'; });
+  document.getElementById('vSave').addEventListener('click',()=>{
+    const realizada=chk('vReal');
+    const p={ id:v?v.id:undefined, fecha:v?v.fecha:hoyStr(), cliente_id:Number(val('vCli')), vendedor_id:uid,
+      tipo_visita_id:Number(val('vTipo'))||null, marca_id:val('vMarca')?Number(val('vMarca')):null,
+      hora_inicio:val('vHi')||null, hora_fin:val('vHf')||null, auditoria_tecnica:chk('vAud'),
+      plan_semanal_id:plan?plan.id:(v?v.plan_semanal_id:null), realizada,
+      motivo_no_visita:realizada?null:(val('vMot')||'—'), nota:val('vNota')||null };
+    if(v) p.modificado_en=new Date().toISOString();
+    if(!p.cliente_id){ toast('Elige un cliente.','err'); return; }
+    save('gvis_visitas',p);
+  });
+}
+
+function planMModal(p,vend){
+  const uid=p?p.vendedor_id:vend;
+  openModal(`<h3>${p?'Editar':'Nuevo'} renglón · plan mensual</h3>
+    <p class="mp">${ymLabel(PERIODO)} · ${esc(usuarioNombre(uid))}</p>
+    ${fldSelect('pmCli','Cliente',optClientes(uid),p?p.cliente_id:'')}
+    ${fldSelect('pmTipo','Tipo de visita',optTipos(),p?p.tipo_visita_id:'')}
+    <div class="fld"><label>Cantidad al mes</label><input type="number" id="pmCant" min="1" value="${p?p.cantidad:1}"></div>
+    <div class="mbtns"><button class="act ghost" onclick="closeModal()">Cancelar</button><button class="act gold" id="pmSave">Guardar</button></div>`);
+  document.getElementById('pmSave').addEventListener('click',()=>{
+    const payload={ id:p?p.id:undefined, mes:primerDia(PERIODO), cliente_id:Number(val('pmCli')), vendedor_id:uid,
+      tipo_visita_id:Number(val('pmTipo')), cantidad:Number(val('pmCant'))||1, creado_por:SESSION.id };
+    save('gvis_plan_mensual',payload);
+  });
+}
+
+function planSModal(vend){
+  openModal(`<h3>Nueva cita semanal</h3>
+    <p class="mp">${esc(usuarioNombre(vend))}</p>
+    ${fldSelect('psCli','Cliente',optClientes(vend),'')}
+    ${fldSelect('psTipo','Tipo de visita',optTipos(),'')}
+    <div class="fld"><label>Fecha planeada</label><input type="date" id="psFecha" value="${hoyStr()}"></div>
+    <div class="mbtns"><button class="act ghost" onclick="closeModal()">Cancelar</button><button class="act gold" id="psSave">Guardar</button></div>`);
+  document.getElementById('psSave').addEventListener('click',()=>{
+    const fecha=val('psFecha'); if(!fecha){ toast('Elige fecha.','err'); return; }
+    save('gvis_plan_semanal',{ semana_inicio:lunesDe(fecha), fecha_planeada:fecha, cliente_id:Number(val('psCli')),
+      vendedor_id:vend, tipo_visita_id:Number(val('psTipo')), creado_por:SESSION.id });
+  });
+}
+
+function clienteModal(c){
+  openModal(`<h3>${c?'Editar':'Nuevo'} cliente</h3>
+    <div class="fld2">
+      <div class="fld"><label>Código</label><input type="text" id="cCod" value="${c?esc(c.codigo||''):''}"></div>
+      ${fldSelect('cEst','Estatus',[['activo','activo'],['inactivo','inactivo'],['mostrador','mostrador']],c?c.estatus:'activo')}
+    </div>
+    <div class="fld"><label>Nombre comercial</label><input type="text" id="cNom" value="${c?esc(c.nombre_comercial):''}"></div>
+    <div class="fld"><label>Razón social</label><input type="text" id="cRaz" value="${c?esc(c.razon_social||''):''}"></div>
+    ${fldSelect('cVend','Vendedor',vendedores().map(v=>[v.id,v.nombre]),c?c.vendedor_id:'')}
+    <div class="fld"><label>Nota</label><textarea id="cNota">${c?esc(c.nota||''):''}</textarea></div>
+    <div class="mbtns"><button class="act ghost" onclick="closeModal()">Cancelar</button><button class="act gold" id="cSave">Guardar</button></div>`);
+  document.getElementById('cSave').addEventListener('click',async()=>{
+    const nom=val('cNom'); if(!nom){ toast('Falta nombre comercial.','err'); return; }
+    const nuevoEst=val('cEst'), nuevoVend=val('cVend');
+    // bitácora de movimiento si cambia vendedor o estatus
+    if(c && (c.vendedor_id!==nuevoVend || c.estatus!==nuevoEst)){
+      await db.from('gvis_movimientos_cartera').insert({ cliente_id:c.id, de_vendedor:c.vendedor_id, a_vendedor:nuevoVend,
+        de_estatus:c.estatus, a_estatus:nuevoEst, motivo:'Edición manual', usuario_id:SESSION.id });
+    }
+    save('gvis_clientes',{ id:c?c.id:undefined, codigo:val('cCod')||null, nombre_comercial:nom,
+      razon_social:val('cRaz')||null, vendedor_id:nuevoVend, estatus:nuevoEst, nota:val('cNota')||null });
+  });
+}
+
+function prospModal(p){
+  openModal(`<h3>${p?'Editar':'Nuevo'} prospecto</h3>
+    ${fldSelect('prTipo','Tipo',[['prospecto','Prospecto'],['inactivo','Inactivo'],['seguimiento','Seguimiento'],['nuevo','Nuevo']],p?p.tipo:'prospecto')}
+    <div class="fld"><label>Nombre</label><input type="text" id="prNom" value="${p?esc(p.nombre):''}"></div>
+    <div class="fld"><label>Contacto</label><input type="text" id="prCont" value="${p?esc(p.contacto||''):''}"></div>
+    ${fldSelect('prVend','Vendedor',vendedores().map(v=>[v.id,v.nombre]),p?p.vendedor_id:SESSION.id)}
+    <div class="fld"><label>Avance %</label><input type="number" id="prAv" min="0" max="100" value="${p?p.avance_pct:0}"></div>
+    <div class="mbtns">${p?`<button class="act danger" id="prDel">Archivar</button>`:''}<button class="act ghost" onclick="closeModal()">Cancelar</button><button class="act gold" id="prSave">Guardar</button></div>`);
+  document.getElementById('prSave').addEventListener('click',()=>{
+    const nom=val('prNom'); if(!nom){ toast('Falta nombre.','err'); return; }
+    save('gvis_prospectos',{ id:p?p.id:undefined, tipo:val('prTipo'), nombre:nom, contacto:val('prCont')||null,
+      vendedor_id:val('prVend'), avance_pct:Number(val('prAv'))||0 });
+  });
+  if(p){ const db2=document.getElementById('prDel'); db2&&db2.addEventListener('click',()=>save('gvis_prospectos',{id:p.id,activo:false})); }
+}
+function prospLogModal(pid){
+  const p=STATE.prospectos.find(x=>x.id===pid);
+  openModal(`<h3>Nota de seguimiento</h3><p class="mp">${esc(p?p.nombre:'')}</p>
+    <div class="fld"><label>Observación</label><textarea id="lgObs"></textarea></div>
+    <div class="fld"><label>Avance % (opcional)</label><input type="number" id="lgAv" min="0" max="100" value="${p?p.avance_pct:0}"></div>
+    <div class="mbtns"><button class="act ghost" onclick="closeModal()">Cancelar</button><button class="act gold" id="lgSave">Guardar</button></div>`);
+  document.getElementById('lgSave').addEventListener('click',async()=>{
+    const obs=val('lgObs'); if(!obs){ toast('Escribe la observación.','err'); return; }
+    try{
+      await db.from('gvis_prospecto_log').insert({ prospecto_id:pid, observacion:obs, usuario_id:SESSION.id });
+      const av=Number(val('lgAv')); if(!isNaN(av)) await db.from('gvis_prospectos').update({avance_pct:av}).eq('id',pid);
+      closeModal(); toast('Nota agregada.','ok'); await reload();
+    }catch(err){ console.error(err); toast('Error: '+(err.message||err),'err'); }
+  });
+}
+
+function grupoModal(g){
+  openModal(`<h3>${g?'Editar':'Nuevo'} grupo · más buscados</h3>
+    <div class="fld"><label>Nombre</label><input type="text" id="gNom" value="${g?esc(g.nombre):''}"></div>
+    <div class="fld2">
+      <div class="fld"><label>Inicio</label><input type="date" id="gIni" value="${g?String(g.fecha_inicio).slice(0,10):hoyStr()}"></div>
+      <div class="fld"><label>Fin</label><input type="date" id="gFin" value="${g?String(g.fecha_fin).slice(0,10):hoyStr()}"></div>
+    </div>
+    <div class="fld"><label>Meta</label><input type="text" id="gMeta" value="${g?esc(g.meta||''):''}"></div>
+    ${g?fldSelect('gEst','Estatus',[['activo','activo'],['cerrado','cerrado'],['archivado','archivado']],g.estatus):''}
+    <div class="mbtns"><button class="act ghost" onclick="closeModal()">Cancelar</button><button class="act gold" id="gSave">Guardar</button></div>`);
+  document.getElementById('gSave').addEventListener('click',()=>{
+    const nom=val('gNom'); if(!nom){ toast('Falta nombre.','err'); return; }
+    const payload={ id:g?g.id:undefined, nombre:nom, fecha_inicio:val('gIni'), fecha_fin:val('gFin'), meta:val('gMeta')||null, creado_por:SESSION.id };
+    if(g) payload.estatus=val('gEst');
+    save('gvis_grupos_buscados',payload);
+  });
+}
+function targetModal(gid){
+  openModal(`<h3>Agregar objetivo</h3><p class="mp">Cliente existente o nombre libre (target que aún no es cliente).</p>
+    ${fldSelect('tgCli','Cliente existente',[['','— nombre libre —']].concat(optClientes()),'')}
+    <div class="fld"><label>O nombre libre</label><input type="text" id="tgLibre" placeholder="Ej: ARIAT, TECOVAS…"></div>
+    <div class="mbtns"><button class="act ghost" onclick="closeModal()">Cancelar</button><button class="act gold" id="tgSave">Agregar</button></div>`);
+  document.getElementById('tgSave').addEventListener('click',()=>{
+    const cli=val('tgCli'), libre=val('tgLibre');
+    if(!cli && !libre){ toast('Elige un cliente o escribe un nombre.','err'); return; }
+    save('gvis_grupos_buscados_det',{ grupo_id:gid, cliente_id:cli?Number(cli):null, nombre_libre:cli?null:libre });
+  });
+}
+
+function corteModal(d){
+  const cli=clienteById(Number(d.cli));
+  const existente=STATE.cortes.find(x=>x.trimestre===d.trim && x.cliente_id===cli.id);
+  openModal(`<h3>Decisión de corte</h3><p class="mp">${esc(cli.nombre_comercial)} · ${d.trim}</p>
+    ${fldSelect('ctDec','Decisión',[['mover','Mover'],['conservar','Conservar'],['inactivar','Inactivar']],existente?existente.decision:'conservar')}
+    <div class="fld"><label>Motivo</label><textarea id="ctMot">${existente?esc(existente.motivo||''):''}</textarea></div>
+    <div class="mbtns"><button class="act ghost" onclick="closeModal()">Cancelar</button><button class="act gold" id="ctSave">Guardar</button></div>`);
+  document.getElementById('ctSave').addEventListener('click',async()=>{
+    const decision=val('ctDec'), motivo=val('ctMot')||null;
+    try{
+      const payload={ trimestre:d.trim, cliente_id:cli.id, candidato_tipo:d.tipo, decision, motivo,
+        decidido_por:SESSION.id, fecha_decision:new Date().toISOString() };
+      if(existente){ await db.from('gvis_cortes').update(payload).eq('id',existente.id); }
+      else { await db.from('gvis_cortes').insert(payload); }
+      // aplicar la decisión "mover" / "inactivar"
+      if(decision==='mover' || decision==='inactivar'){
+        let cambios={}, mov={ cliente_id:cli.id, de_vendedor:cli.vendedor_id, de_estatus:cli.estatus, motivo:'Corte '+d.trim+': '+decision, usuario_id:SESSION.id };
+        if(decision==='inactivar' || d.tipo==='sin_compra'){ cambios.estatus='inactivo'; mov.a_estatus='inactivo'; mov.a_vendedor=cli.vendedor_id; }
+        else if(d.tipo==='jair_a_jose'){ cambios.vendedor_id='jose'; mov.a_vendedor='jose'; mov.a_estatus=cli.estatus; }
+        else if(d.tipo==='jose_a_mostrador'){ cambios.estatus='mostrador'; mov.a_estatus='mostrador'; mov.a_vendedor=cli.vendedor_id; }
+        if(Object.keys(cambios).length){ await db.from('gvis_clientes').update(cambios).eq('id',cli.id);
+          await db.from('gvis_movimientos_cartera').insert(mov); }
+      }
+      closeModal(); toast('Decisión registrada.','ok'); await reload();
+    }catch(err){ console.error(err); toast('Error: '+(err.message||err),'err'); }
+  });
+}
+
+function catModal(tabla,x,titulo){
+  openModal(`<h3>${x?'Editar':'Nuevo'} · ${titulo}</h3>
+    <div class="fld"><label>Nombre</label><input type="text" id="kNom" value="${x?esc(x.nombre):''}"></div>
+    <div class="fld2">
+      <div class="fld"><label>Letra / clave</label><input type="text" id="kLetra" maxlength="4" value="${x?esc(x.letra):''}"></div>
+      <div class="fld"><label>Color</label><input type="color" id="kColor" value="${x?esc(x.color):'#888888'}" style="height:42px;padding:4px"></div>
+    </div>
+    <div class="fld chkline"><input type="checkbox" id="kAct" ${!x||x.activo?'checked':''}><label>Activo</label></div>
+    <div class="mbtns"><button class="act ghost" onclick="closeModal()">Cancelar</button><button class="act gold" id="kSave">Guardar</button></div>`);
+  document.getElementById('kSave').addEventListener('click',()=>{
+    const nom=val('kNom'); if(!nom){ toast('Falta nombre.','err'); return; }
+    save(tabla,{ id:x?x.id:undefined, nombre:nom, letra:val('kLetra')||'?', color:val('kColor'), activo:chk('kAct') });
+  });
+}
+window.closeModal=closeModal;
+
+/* =====================================================================
+   PERÍODO (selector de mes) + LOGIN
+   ===================================================================== */
+function fillPeriodSelect(){
+  const sel=document.getElementById('periodSel');
+  const d=new Date(); const arr=[];
+  for(let i=2;i>=-3;i--){ const dd=new Date(d.getFullYear(),d.getMonth()-i,1); arr.push(dd.getFullYear()+'-'+String(dd.getMonth()+1).padStart(2,'0')); }
+  sel.innerHTML=arr.map(ym=>`<option value="${ym}">${ymLabel(ym)}</option>`).join('');
+  if(!PERIODO) PERIODO=ymActual();
+  if([...sel.options].some(o=>o.value===PERIODO)) sel.value=PERIODO; else { sel.value=sel.options[0].value; PERIODO=sel.value; }
+  sel.addEventListener('change',e=>{ PERIODO=e.target.value; render(); });
+}
+
+async function doLogin(){
+  const msg=document.getElementById('loginMsg');
+  const pin=document.getElementById('pinInput').value.trim();
+  if(!pin){ msg.className='msg err'; msg.textContent='Escribe tu PIN.'; return; }
+  if(!db){ msg.className='msg err'; msg.textContent='Falta configurar el acceso (bloque CONFIG).'; return; }
+  msg.className='msg info'; msg.textContent='Verificando…';
+  try{
+    const {data,error}=await db.rpc('gvis_check_pin',{p_pin:pin});
+    if(error) throw error;
+    const row=Array.isArray(data)?data[0]:data;
+    if(!row){ msg.className='msg err'; msg.textContent='PIN incorrecto.'; return; }
+    SESSION.pin=pin; SESSION.id=row.usuario_id; SESSION.nombre=row.nombre; SESSION.rol=row.rol;
+    document.getElementById('sessUser').textContent=row.nombre;
+    document.getElementById('sessPill').textContent=rolLabel(row.rol);
+    document.getElementById('pName').textContent=row.nombre;
+    document.getElementById('pRole').textContent=rolLabel(row.rol);
+    document.getElementById('hoyLbl').textContent='Hoy: '+fmtFecha(hoyStr());
+    msg.className='msg info'; msg.textContent='Cargando…';
+    await loadData();
+    currentView=null;
+    document.getElementById('loginOverlay').classList.add('hidden');
+    document.getElementById('app').style.display='block';
+    render();
+    toast('Bienvenido(a), '+row.nombre,'ok');
+  }catch(err){ console.error(err); msg.className='msg err'; msg.textContent='Error al validar PIN: '+(err.message||err); }
+}
+
+function init(){
+  fillPeriodSelect();
+  const msg=document.getElementById('loginMsg');
+  if(!cfgOK){
+    msg.className='msg err';
+    msg.innerHTML='⚠ Falta pegar la URL y la llave en el bloque <b>CONFIG</b> (arriba en el código). Pídeselo a Rodrigo.';
+    document.getElementById('pinBtn').disabled=true; return;
+  }
+  db=window.supabase.createClient(CONFIG.SUPABASE_URL,CONFIG.SUPABASE_ANON_KEY);
+  msg.className='msg info'; msg.textContent='Conectado. Ingresa tu PIN.';
+  document.getElementById('pinBtn').addEventListener('click',doLogin);
+  document.getElementById('pinInput').addEventListener('keydown',e=>{ if(e.key==='Enter') doLogin(); });
+  document.getElementById('logoutBtn').addEventListener('click',()=>location.reload());
+  document.getElementById('pinInput').focus();
+}
+init();
+</script>
+</body>
+</html>
