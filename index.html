@@ -952,7 +952,7 @@ function viewEstrellas(){
   else h+=lista.map(e=>{
     const m=marcaById(e.marca_id);
     const cli=STATE.estrellasCli.filter(x=>x.estrella_id===e.id);
-    const chips=cli.map(x=>{ const c=clienteById(x.cliente_id); return `<span class="chipmini">${esc(c?c.nombre_comercial:'#'+x.cliente_id)}</span>`; }).join('');
+    const chips=cli.map(x=>{ if(x.cliente_id){ const c=clienteById(x.cliente_id); return `<span class="chipmini">${esc(c?c.nombre_comercial:'#'+x.cliente_id)}</span>`; } return `<span class="chipmini libre">${esc(x.nombre_libre)}</span>`; }).join('');
     return `<div class="trow"><div class="body">
       <div class="ti">★ ${esc(e.producto)}${m?` <span class="badge marca">${esc(m.nombre)}</span>`:''}</div>
       <div class="meta">${esc(usuarioNombre(e.vendedor_id))}${e.nota?' · '+esc(e.nota):''} · ${cli.length} cliente(s) a ofrecer</div>
@@ -1542,17 +1542,36 @@ function estrellaModal(e){
 }
 function estrellaCliModal(eid){
   const e=STATE.estrellas.find(x=>x.id===eid);
-  const ya=new Set(STATE.estrellasCli.filter(x=>x.estrella_id===eid).map(x=>x.cliente_id));
-  const disp=STATE.clientes.filter(c=>c.vendedor_id===e.vendedor_id && c.estatus!=='inactivo' && !ya.has(c.id));
+  const existing=STATE.estrellasCli.filter(x=>x.estrella_id===eid);
+  const yaCli=new Set(existing.filter(x=>x.cliente_id).map(x=>x.cliente_id));
+  const yaLib=new Set(existing.filter(x=>x.nombre_libre).map(x=>String(x.nombre_libre).toLowerCase()));
+  const usados=new Set();
+  const chk=(v,label,badge)=>`<label style="display:flex;align-items:center;gap:8px;font-family:Arial;font-size:13px;padding:6px 8px;border:1px solid var(--line);border-radius:8px;cursor:pointer"><input type="checkbox" class="esCli" value="${esc(v)}" style="width:auto;accent-color:var(--green)"> ${esc(label)}${badge||''}</label>`;
+  // 1) Mas buscados (clientes objetivo de grupos_buscados)
+  let secB='';
+  STATE.gruposDet.forEach(d=>{
+    if(d.cliente_id){ if(yaCli.has(d.cliente_id)||usados.has(d.cliente_id)) return; usados.add(d.cliente_id); const c=clienteById(d.cliente_id); secB+=chk('c:'+d.cliente_id, c?c.nombre_comercial:'#'+d.cliente_id, ''); }
+    else if(d.nombre_libre){ if(yaLib.has(String(d.nombre_libre).toLowerCase())) return; secB+=chk('l:'+d.nombre_libre, d.nombre_libre, ' <span class="chipmini libre" style="margin:0">objetivo</span>'); }
+  });
+  // 2) Activos y 3) Inactivos (sin repetir los ya listados)
+  let secA=''; STATE.clientes.filter(c=>c.estatus==='activo' && !usados.has(c.id) && !yaCli.has(c.id)).forEach(c=>{ usados.add(c.id); secA+=chk('c:'+c.id, c.nombre_comercial, ''); });
+  let secI=''; STATE.clientes.filter(c=>c.estatus==='inactivo' && !usados.has(c.id) && !yaCli.has(c.id)).forEach(c=>{ usados.add(c.id); secI+=chk('c:'+c.id, c.nombre_comercial, ''); });
+  const sec=(titulo,html)=> html?`<div class="sechead" style="padding:10px 0 4px">${titulo}</div><div style="display:grid;grid-template-columns:1fr;gap:6px">${html}</div>`:'';
   openModal(`<h3>Clientes a ofrecer</h3><p class="mp">★ ${esc(e.producto)} · marca uno o varios</p>
-    ${disp.length?`<div class="fld"><div style="display:grid;grid-template-columns:1fr;gap:6px;max-height:320px;overflow-y:auto">${disp.map(c=>`<label style="display:flex;align-items:center;gap:8px;font-family:Arial;font-size:13px;padding:6px 8px;border:1px solid var(--line);border-radius:8px;cursor:pointer"><input type="checkbox" class="esCli" value="${c.id}" style="width:auto;accent-color:var(--green)"> ${esc(c.nombre_comercial)}</label>`).join('')}</div></div>`
-      :`<div class="empty">Ya agregaste todos los clientes de este vendedor (o no tiene clientes activos).</div>`}
-    <div class="mbtns"><button class="act ghost" onclick="closeModal()">Cerrar</button>${disp.length?`<button class="act gold" id="esCliSave">Agregar</button>`:''}</div>`);
-  const b=document.getElementById('esCliSave');
-  if(b) b.addEventListener('click',async()=>{
-    const ids=[...document.querySelectorAll('.esCli:checked')].map(x=>Number(x.value));
-    if(!ids.length){ toast('Marca al menos un cliente.','err'); return; }
-    try{ const {error}=await db.from('gvis_estrellas_clientes').insert(ids.map(cid=>({estrella_id:eid,cliente_id:cid}))); if(error) throw error;
+    <div style="max-height:330px;overflow-y:auto;padding-right:2px">
+      ${sec('Más buscados',secB)}${sec('Activos',secA)}${sec('Inactivos',secI)}
+      ${(!secA&&!secB&&!secI)?'<div class="empty">Ya están todos agregados.</div>':''}
+    </div>
+    <div class="fld" style="margin-top:12px"><label>Agregar manual (no está en ninguna lista)</label><input type="text" id="esManual" placeholder="Nombre del cliente" autocomplete="off"></div>
+    <div class="mbtns"><button class="act ghost" onclick="closeModal()">Cerrar</button><button class="act gold" id="esCliSave">Agregar</button></div>`);
+  document.getElementById('esCliSave').addEventListener('click',async()=>{
+    const rows=[];
+    document.querySelectorAll('.esCli:checked').forEach(x=>{ const v=x.value;
+      if(v.slice(0,2)==='c:') rows.push({estrella_id:eid,cliente_id:Number(v.slice(2))});
+      else if(v.slice(0,2)==='l:') rows.push({estrella_id:eid,nombre_libre:v.slice(2)}); });
+    const man=val('esManual'); if(man) rows.push({estrella_id:eid,nombre_libre:man});
+    if(!rows.length){ toast('Marca al menos uno o escribe un manual.','err'); return; }
+    try{ const {error}=await db.from('gvis_estrellas_clientes').insert(rows); if(error) throw error;
       closeModal(); toast('Clientes agregados.','ok'); await reload(); }
     catch(err){ console.error(err); toast('Error: '+(err.message||err),'err'); }
   });
