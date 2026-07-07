@@ -1,2 +1,4 @@
 # Nunca publicar SQL en un sitio público (solo se corre en Supabase)
 *.sql
+# Guía interna de publicación
+PUBLICAR.md
