@@ -701,7 +701,7 @@ function viewCatalogos(){
       <button class="act sm" data-act="${act.nuevo}">+ Agregar</button></div>
       <div class="tblwrap"><table class="grid"><thead><tr><th>Nombre</th><th>Letra</th><th>Color</th><th>Activo</th><th></th></tr></thead><tbody>
       ${items.map(x=>`<tr><td><span class="nm">${esc(x.nombre)}</span></td><td>${esc(x.letra)}</td>
-        <td><span class="swatch" style="background:${esc(x.color)}"></span>${esc(x.color)}</td>
+        <td><span class="swatch" style="background:${esc(x.color)}"></span></td>
         <td><span class="badge est-${x.activo?'activo':'inactivo'}">${x.activo?'sí':'no'}</span></td>
         <td><button class="act ghost sm" data-act="${act.edit}" data-id="${x.id}">Editar</button></td></tr>`).join('')}
       </tbody></table></div></div>`;
