@@ -2,3 +2,5 @@
 *.sql
 # Guía interna de publicación
 PUBLICAR.md
+# Manuales internos (no publicar)
+Manual_*.html
