@@ -219,7 +219,8 @@ const STATE={
   usuarios:[], config:{}, tipos:[], marcas:[], clientes:[],
   planMensual:[], planSemanal:[], visitas:[],
   prospectos:[], prospLog:[], grupos:[], gruposDet:[],
-  compras:[], cortes:[]
+  compras:[], cortes:[],
+  cotiz:[], planAud:[], react:[], objetivos:[], cortesR:[]
 };
 let PERIODO=null;         // 'YYYY-MM'
 let currentView=null;
@@ -264,7 +265,8 @@ async function loadData(){
   const [
     usuarios, tipos, marcas, clientes, config,
     planM, planS, visitas, prosp, prospLog,
-    grupos, gruposDet, compras, cortes
+    grupos, gruposDet, compras, cortes,
+    cotiz, planAud, react, objetivos, cortesR
   ] = await Promise.all([
     db.from('gvis_usuarios_pub').select('*'),
     q('gvis_tipos_visita'), q('gvis_marcas'),
@@ -272,9 +274,11 @@ async function loadData(){
     q('gvis_plan_mensual'), q('gvis_plan_semanal'), q('gvis_visitas'),
     q('gvis_prospectos'), q('gvis_prospecto_log'),
     q('gvis_grupos_buscados'), q('gvis_grupos_buscados_det'),
-    q('gvis_compras_mensuales'), q('gvis_cortes')
+    q('gvis_compras_mensuales'), q('gvis_cortes'),
+    q('gvis_cotizaciones'), q('gvis_plan_auditorias'),
+    q('gvis_reactivacion'), q('gvis_objetivos'), q('gvis_cortes_resultados')
   ]);
-  const err = [usuarios,tipos,marcas,clientes,config,planM,planS,visitas,prosp,prospLog,grupos,gruposDet,compras,cortes].find(r=>r.error);
+  const err = [usuarios,tipos,marcas,clientes,config,planM,planS,visitas,prosp,prospLog,grupos,gruposDet,compras,cortes,cotiz,planAud,react,objetivos,cortesR].find(r=>r.error);
   if(err) throw err.error;
 
   STATE.usuarios   = usuarios.data||[];
@@ -290,6 +294,11 @@ async function loadData(){
   STATE.gruposDet  = gruposDet.data||[];
   STATE.compras    = compras.data||[];
   STATE.cortes     = cortes.data||[];
+  STATE.cotiz      = cotiz.data||[];
+  STATE.planAud    = planAud.data||[];
+  STATE.react      = react.data||[];
+  STATE.objetivos  = objetivos.data||[];
+  STATE.cortesR    = cortesR.data||[];
   STATE.config     = {};
   (config.data||[]).forEach(c=>STATE.config[c.clave]=c.valor);
 }
@@ -299,10 +308,10 @@ async function reload(){ await loadData(); render(); }
    TABS POR ROL
    ===================================================================== */
 function tabsFor(rol){
-  if(rol==='vendedor')    return [['visitas','Mi Día'],['plan','Mi Plan'],['clientes','Mi Cartera'],['prospectos','Prospectos'],['buscados','Más Buscados']];
-  if(rol==='coordinador') return [['tablero','Tablero'],['plan','Plan'],['clientes','Clientes'],['prospectos','Prospectos'],['buscados','Más Buscados'],['cortes','Cortes']];
-  if(rol==='admin')       return [['compras','Compras'],['clientes','Clientes'],['catalogos','Catálogos'],['config','Umbrales'],['usuarios','Usuarios']];
-  return [['consolidado','Consolidado'],['clientes','Clientes'],['cortes','Cortes'],['buscados','Más Buscados']]; // direccion
+  if(rol==='vendedor')    return [['visitas','Mi Día'],['plan','Mi Plan'],['auditorias','Auditorías'],['reactivacion','Inactivos'],['clientes','Mi Cartera'],['prospectos','Prospectos'],['buscados','Más Buscados']];
+  if(rol==='coordinador') return [['tablero','Tablero'],['plan','Plan'],['auditorias','Auditorías'],['reactivacion','Inactivos'],['clientes','Clientes'],['cotizaciones','Cotizaciones'],['prospectos','Prospectos'],['buscados','Más Buscados'],['cortes','Cortes']];
+  if(rol==='admin')       return [['cotizaciones','Cotizaciones'],['compras','Compras'],['reactivacion','Inactivos'],['clientes','Clientes'],['catalogos','Catálogos'],['config','Umbrales'],['usuarios','Usuarios']];
+  return [['consolidado','Consolidado'],['cotizaciones','Cotizaciones'],['objetivos','Objetivos'],['clientes','Clientes'],['cortes','Cortes'],['buscados','Más Buscados']]; // direccion
 }
 
 /* =====================================================================
@@ -318,7 +327,8 @@ function render(){
   const v=document.getElementById('view');
   const fn={visitas:viewVisitas,plan:viewPlan,clientes:viewClientes,prospectos:viewProspectos,
             buscados:viewBuscados,tablero:viewTablero,cortes:viewCortes,compras:viewCompras,
-            catalogos:viewCatalogos,config:viewConfig,usuarios:viewUsuarios,consolidado:viewConsolidado}[currentView];
+            catalogos:viewCatalogos,config:viewConfig,usuarios:viewUsuarios,consolidado:viewConsolidado,
+            cotizaciones:viewCotizaciones,auditorias:viewAuditorias,reactivacion:viewReactivacion,objetivos:viewObjetivos}[currentView];
   v.innerHTML = fn ? fn() : '<div class="empty">Vista no disponible.</div>';
   if(fn && fn._after) fn._after();
   bindActions();
@@ -450,6 +460,13 @@ function viewPlan(){
       <div class="meta">${fmtFecha(p.fecha_planeada)} · ${t?`<span class="badge ${t.letra}">${esc(t.nombre)}</span>`:''}</div></div>
       ${soloLectura?'':`<button class="act danger sm" data-act="delPlanS" data-id="${p.id}">✕</button>`}</div>`;
   }).join('');
+  h+=`</div></div>`;
+  // Auditorías del mes (parte de la entrega semanal a Alma)
+  const auds=STATE.planAud.filter(a=>a.vendedor_id===uid && String(a.mes).slice(0,7)===ym);
+  h+=`<div class="card"><div class="chead"><div class="t"><small>${ymLabel(ym)}</small>Auditorías técnicas del mes</div></div><div class="cbody">`;
+  if(!auds.length) h+=`<div class="empty">Sin auditorías planeadas (se lanzan en la pestaña Auditorías).</div>`;
+  else h+=auds.map(a=>{ const c=clienteById(a.cliente_id); const ec={planeada:'mostrador',realizada:'activo',cancelada:'inactivo'}[a.estatus];
+    return `<div class="trow"><div class="body"><div class="ti ${a.estatus==='realizada'?'done':''}">${esc(c?c.nombre_comercial:'—')}</div><div class="meta"><span class="badge est-${ec}">${a.estatus}</span>${a.fecha_realizada?' · '+fmtFecha(a.fecha_realizada):''}</div></div></div>`; }).join('');
   h+=`</div></div>`;
   return h;
 }
@@ -761,6 +778,132 @@ function viewConsolidado(){
 }
 
 /* =====================================================================
+   FASE 2 · helpers + vistas nuevas
+   ===================================================================== */
+function cuatrimestreDe(ym){ const p=ym.split('-'); const y=p[0], m=Number(p[1]); return y+'-C'+(Math.floor((m-1)/4)+1); }
+function cotizCli(r){ if(r.cliente_id){ const c=clienteById(r.cliente_id); return c?c.nombre_comercial:'#'+r.cliente_id; } return r.nombre_libre||'—'; }
+
+/* ---- COTIZACIONES (captura Alma; junta mensual) ---- */
+function viewCotizaciones(){
+  const ym=PERIODO, mes=primerDia(ym);
+  const puedeEditar=puedeAdmin()||puedeCoord();
+  const fVend=viewCotizaciones._vend||'';
+  let lista=STATE.cotiz.filter(c=>String(c.mes).slice(0,10)===mes);
+  if(fVend) lista=lista.filter(c=>c.vendedor_id===fVend);
+  const abiertas=lista.filter(c=>c.estatus==='abierta');
+  const montoAb=abiertas.reduce((a,c)=>a+Number(c.monto||0),0);
+  const apunto=lista.filter(c=>c.estatus==='abierta'&&c.probabilidad==='alta');
+  let h=`<div class="stats">
+    <div class="stat"><div class="k">Cotizaciones ${ymLabel(ym)}</div><div class="v">${lista.length}</div><div class="s">${abiertas.length} abiertas</div></div>
+    <div class="stat"><div class="k">Monto abierto</div><div class="v" style="font-size:26px">${money(montoAb)}</div><div class="s">en cotizaciones vivas</div></div>
+    <div class="stat"><div class="k">A punto de comprar</div><div class="v" style="color:var(--ok)">${apunto.length}</div><div class="s">probabilidad alta</div></div>
+    <div class="stat"><div class="k">Ganadas</div><div class="v">${lista.filter(c=>c.estatus==='ganada').length}</div><div class="s">este mes</div></div>
+  </div>`;
+  h+=`<div class="card"><div class="chead"><div class="t"><small>Junta mensual · ${ymLabel(ym)}</small>Cotizaciones del mes</div>
+    ${puedeEditar?`<button class="act gold sm" data-act="nuevaCotiz">+ Cotización</button>`:''}</div>
+    <div class="cpad filtbar">Vendedor:
+      <select id="cotVend"><option value="">Todos</option>${vendedores().map(v=>`<option value="${v.id}" ${v.id===fVend?'selected':''}>${esc(v.nombre)}</option>`).join('')}</select></div>
+    <div class="tblwrap"><table class="grid"><thead><tr><th>Cliente</th><th>Producto / marca</th><th>Monto</th><th>Prob.</th><th>Estatus</th><th>Vendedor</th>${puedeEditar?'<th></th>':''}</tr></thead><tbody>`;
+  if(!lista.length) h+=`<tr><td colspan="7"><div class="empty" style="padding:8px 0">Sin cotizaciones este mes.</div></td></tr>`;
+  else h+=lista.slice().sort((a,b)=>Number(b.monto)-Number(a.monto)).map(c=>{
+    const m=marcaById(c.marca_id);
+    const pc={alta:'var(--ok)',media:'var(--warn)',baja:'var(--muted)'}[c.probabilidad];
+    const ec={abierta:'mostrador',ganada:'activo',perdida:'inactivo'}[c.estatus];
+    return `<tr><td><span class="nm">${esc(cotizCli(c))}</span></td>
+      <td style="color:var(--muted)">${esc(c.producto||'')}${m?` · ${esc(m.nombre)}`:''}</td>
+      <td>${money(c.monto)}</td>
+      <td><span class="badge" style="background:rgba(0,0,0,.05);color:${pc}">${c.probabilidad}</span></td>
+      <td><span class="badge est-${ec}">${c.estatus}</span></td>
+      <td style="color:var(--muted)">${esc(usuarioNombre(c.vendedor_id))}</td>
+      ${puedeEditar?`<td><button class="act ghost sm" data-act="editCotiz" data-id="${c.id}">Editar</button></td>`:''}</tr>`;
+  }).join('');
+  h+=`</tbody></table></div></div>`;
+  return h;
+}
+viewCotizaciones._after=function(){ const s=document.getElementById('cotVend'); if(s) s.addEventListener('change',e=>{ viewCotizaciones._vend=e.target.value; render(); }); };
+
+/* ---- PLAN DE AUDITORIAS (coordinador lanza; vendedor marca) ---- */
+function viewAuditorias(){
+  const ym=PERIODO, mes=primerDia(ym);
+  const soloMios=esVendedor();
+  const puedeEditar=puedeCoord();
+  let lista=STATE.planAud.filter(a=>String(a.mes).slice(0,10)===mes);
+  if(soloMios) lista=lista.filter(a=>a.vendedor_id===SESSION.id);
+  let h=`<div class="card"><div class="chead"><div class="t"><small>Inicio de mes · ${ymLabel(ym)}</small>Plan de auditorías técnicas</div>
+    ${puedeEditar?`<button class="act gold sm" data-act="nuevaAud">+ Auditoría</button>`:''}</div><div class="cbody">`;
+  if(!lista.length) h+=`<div class="empty">Sin auditorías planeadas para este mes.${puedeEditar?' Lánzalas con "+ Auditoría".':''}</div>`;
+  else{
+    const vs=[...new Set(lista.map(a=>a.vendedor_id))];
+    vs.forEach(vid=>{
+      h+=`<div class="sechead">${esc(usuarioNombre(vid))} · ${lista.filter(a=>a.vendedor_id===vid).length}</div>`;
+      h+=lista.filter(a=>a.vendedor_id===vid).map(a=>{
+        const c=clienteById(a.cliente_id);
+        const ec={planeada:'mostrador',realizada:'activo',cancelada:'inactivo'}[a.estatus];
+        return `<div class="trow"><div class="body"><div class="ti ${a.estatus==='realizada'?'done':''}">${esc(c?c.nombre_comercial:'—')}</div>
+          <div class="meta"><span class="badge est-${ec}">${a.estatus}</span>${a.fecha_realizada?' · '+fmtFecha(a.fecha_realizada):''}${a.nota?' · '+esc(a.nota):''}</div></div>
+          <div class="rowbtns">
+            ${a.estatus==='planeada'?`<button class="act ghost sm" data-act="audRealizada" data-id="${a.id}">Marcar realizada</button>`:''}
+            ${puedeEditar?`<button class="act danger sm" data-act="delAud" data-id="${a.id}">✕</button>`:''}
+          </div></div>`;
+      }).join('');
+    });
+  }
+  h+=`</div></div>`;
+  return h;
+}
+
+/* ---- INACTIVOS / REACTIVACION (campaña mensual) ---- */
+function viewReactivacion(){
+  const ym=PERIODO, mes=primerDia(ym);
+  const soloMios=esVendedor();
+  const puedeElegir=puedeCoord()||puedeAdmin();
+  let lista=STATE.react.filter(r=>String(r.mes).slice(0,10)===mes);
+  if(soloMios) lista=lista.filter(r=>r.vendedor_id===SESSION.id);
+  const estLabel={por_visitar:'Por visitar',visitado:'Visitado',reactivado:'Reactivado',descartado:'Descartado'};
+  const estClass={por_visitar:'mostrador',visitado:'mostrador',reactivado:'activo',descartado:'inactivo'};
+  const nInact=STATE.clientes.filter(c=>c.estatus==='inactivo').length;
+  let h=`<div class="card"><div class="chead"><div class="t"><small>Campaña mensual · ${ymLabel(ym)}</small>Inactivos a reactivar</div>
+    ${puedeElegir?`<button class="act gold sm" data-act="nuevaReact">+ Elegir inactivo</button>`:''}</div>
+    ${puedeElegir?`<div class="cpad" style="font-family:Arial;font-size:12px;color:var(--muted)">${nInact} cliente(s) con estatus inactivo disponibles para elegir.</div>`:''}
+    <div class="cbody">`;
+  if(!lista.length) h+=`<div class="empty">Sin inactivos elegidos para este mes.</div>`;
+  else h+=lista.map(r=>{
+    const c=clienteById(r.cliente_id);
+    return `<div class="trow"><div class="body">
+      <div class="ti ${r.estatus==='reactivado'?'done':''}">${esc(c?c.nombre_comercial:'—')}</div>
+      <div class="meta"><span class="badge est-${estClass[r.estatus]||'mostrador'}">${estLabel[r.estatus]||r.estatus}</span> · ${esc(usuarioNombre(r.vendedor_id))}${r.motivo?' · '+esc(r.motivo):''}${r.resultado?' · '+esc(r.resultado):''}</div>
+    </div>
+    <div class="rowbtns">
+      <button class="act ghost sm" data-act="editReact" data-id="${r.id}">Actualizar</button>
+      ${puedeElegir?`<button class="act danger sm" data-act="delReact" data-id="${r.id}">✕</button>`:''}
+    </div></div>`;
+  }).join('');
+  h+=`</div></div>`;
+  return h;
+}
+
+/* ---- OBJETIVOS ESTRATEGICOS + CORTE CUATRIMESTRAL (dirección) ---- */
+function viewObjetivos(){
+  const cuatri=cuatrimestreDe(PERIODO);
+  let h=`<div class="card"><div class="chead"><div class="t"><small>Corte cuatrimestral · ${cuatri}</small>Objetivos estratégicos</div>
+    <button class="act gold sm" data-act="nuevoObj">+ Objetivo</button></div>
+    <div class="tblwrap"><table class="grid"><thead><tr><th>Objetivo</th><th>Meta</th><th>Año</th><th>Responsable</th><th>Avance ${cuatri}</th><th></th></tr></thead><tbody>`;
+  const objs=STATE.objetivos.filter(o=>o.activo);
+  if(!objs.length) h+=`<tr><td colspan="6"><div class="empty" style="padding:8px 0">Sin objetivos. Crea el primero.</div></td></tr>`;
+  else h+=objs.map(o=>{
+    const cr=STATE.cortesR.find(x=>x.cuatrimestre===cuatri && x.objetivo_id===o.id);
+    const av=cr?cr.avance_pct:null;
+    return `<tr><td><span class="nm">${esc(o.nombre)}</span>${o.descripcion?`<div style="font-family:Arial;font-size:11px;color:var(--muted);margin-top:2px">${esc(o.descripcion)}</div>`:''}</td>
+      <td style="color:var(--muted)">${esc(o.meta||'')}</td><td>${o.anio}</td><td style="color:var(--muted)">${o.responsable_id?esc(usuarioNombre(o.responsable_id)):''}</td>
+      <td class="pct" style="color:${av==null?'var(--muted)':av>=90?'var(--ok)':av>=60?'var(--warn)':'var(--bad)'}">${av==null?'—':av+'%'}${cr&&cr.resultado?`<div style="font-family:Arial;font-size:11px;font-weight:normal;color:var(--muted)">${esc(cr.resultado)}</div>`:''}</td>
+      <td><div class="rowbtns"><button class="act ghost sm" data-act="cortarObj" data-id="${o.id}" data-cuatri="${cuatri}">Registrar corte</button><button class="act ghost sm" data-act="editObj" data-id="${o.id}">Editar</button></div></td></tr>`;
+  }).join('');
+  h+=`</tbody></table></div>
+    <div class="cpad" style="font-family:Arial;font-size:12px;color:var(--muted)">Cuatrimestres: C1 ene–abr · C2 may–ago · C3 sep–dic. El corte registra el avance de cada objetivo estratégico.</div></div>`;
+  return h;
+}
+
+/* =====================================================================
    MODAL genérico
    ===================================================================== */
 function openModal(html){ document.getElementById('modalBox').innerHTML=html; document.getElementById('modalWrap').classList.remove('hidden'); }
@@ -856,7 +999,30 @@ const ACTIONS={
     const u=STATE.usuarios.find(x=>x.id===d.id); if(!u) return;
     if(u.activo && !confirm('¿Desactivar a '+u.nombre+'? No podrá iniciar sesión.')) return;
     await userUpsert({p_id:u.id,p_nombre:u.nombre,p_rol:u.rol,p_activo:!u.activo});
-  }
+  },
+
+  /* ---- COTIZACIONES ---- */
+  nuevaCotiz(){ cotizModal(null); },
+  editCotiz(d){ cotizModal(STATE.cotiz.find(x=>x.id==d.id)); },
+
+  /* ---- AUDITORIAS ---- */
+  nuevaAud(){ audModal(); },
+  delAud(d){ remove('gvis_plan_auditorias',d.id,'¿Quitar esta auditoría del plan?'); },
+  async audRealizada(d){
+    try{ const {error}=await db.from('gvis_plan_auditorias').update({estatus:'realizada',fecha_realizada:hoyStr()}).eq('id',d.id); if(error) throw error;
+      toast('Auditoría marcada como realizada.','ok'); await reload(); }
+    catch(e){ console.error(e); toast('Error: '+(e.message||e),'err'); }
+  },
+
+  /* ---- REACTIVACION ---- */
+  nuevaReact(){ reactModal(null); },
+  editReact(d){ reactModal(STATE.react.find(x=>x.id==d.id)); },
+  delReact(d){ remove('gvis_reactivacion',d.id,'¿Quitar de la campaña de reactivación?'); },
+
+  /* ---- OBJETIVOS ---- */
+  nuevoObj(){ objModal(null); },
+  editObj(d){ objModal(STATE.objetivos.find(x=>x.id==d.id)); },
+  cortarObj(d){ corteResModal(Number(d.id), d.cuatri); }
 };
 
 async function userUpsert(args){
@@ -1072,6 +1238,112 @@ function catModal(tabla,x,titulo){
   document.getElementById('kSave').addEventListener('click',()=>{
     const nom=val('kNom'); if(!nom){ toast('Falta nombre.','err'); return; }
     save(tabla,{ id:x?x.id:undefined, nombre:nom, letra:val('kLetra')||'?', color:val('kColor'), activo:chk('kAct') });
+  });
+}
+function cotizModal(c){
+  openModal(`<h3>${c?'Editar':'Nueva'} cotización</h3><p class="mp">${ymLabel(PERIODO)}</p>
+    ${fldSelect('coCli','Cliente',[['','— nombre libre —']].concat(optClientes()),c?c.cliente_id:'')}
+    <div class="fld"><label>O nombre libre (si aún no es cliente)</label><input type="text" id="coLibre" value="${c?esc(c.nombre_libre||''):''}"></div>
+    <div class="fld2">
+      <div class="fld"><label>Monto</label><input type="number" id="coMonto" min="0" step="1" value="${c?Number(c.monto):''}"></div>
+      ${fldSelect('coMarca','Marca',optMarcas(),c?c.marca_id:'')}
+    </div>
+    <div class="fld"><label>Producto</label><input type="text" id="coProd" value="${c?esc(c.producto||''):''}"></div>
+    <div class="fld2">
+      ${fldSelect('coProb','Probabilidad',[['alta','Alta — a punto de comprar'],['media','Media'],['baja','Baja']],c?c.probabilidad:'media')}
+      ${fldSelect('coEst','Estatus',[['abierta','Abierta'],['ganada','Ganada'],['perdida','Perdida']],c?c.estatus:'abierta')}
+    </div>
+    ${fldSelect('coVend','Vendedor',vendedores().map(v=>[v.id,v.nombre]),c?c.vendedor_id:'')}
+    <div class="fld"><label>Nota</label><textarea id="coNota">${c?esc(c.nota||''):''}</textarea></div>
+    <div class="mbtns">${c?`<button class="act danger" id="coDel">Eliminar</button>`:''}<button class="act ghost" onclick="closeModal()">Cancelar</button><button class="act gold" id="coSave">Guardar</button></div>`);
+  document.getElementById('coSave').addEventListener('click',()=>{
+    const cli=val('coCli'), libre=val('coLibre');
+    if(!cli && !libre){ toast('Elige un cliente o escribe un nombre.','err'); return; }
+    save('gvis_cotizaciones',{ id:c?c.id:undefined, cliente_id:cli?Number(cli):null, nombre_libre:cli?null:libre,
+      mes:primerDia(PERIODO), monto:Number(val('coMonto'))||0, marca_id:val('coMarca')?Number(val('coMarca')):null,
+      producto:val('coProd')||null, probabilidad:val('coProb'), estatus:val('coEst'), vendedor_id:val('coVend')||null,
+      nota:val('coNota')||null, capturado_por:SESSION.id });
+  });
+  if(c){ const d=document.getElementById('coDel'); d&&d.addEventListener('click',()=>{ closeModal(); remove('gvis_cotizaciones',c.id,'¿Eliminar cotización?'); }); }
+}
+
+function audModal(){
+  openModal(`<h3>Auditoría técnica planeada</h3><p class="mp">${ymLabel(PERIODO)} · inicio de mes</p>
+    ${fldSelect('auVend','Vendedor',vendedores().map(v=>[v.id,v.nombre]),'')}
+    <div class="fld"><label>Cliente</label><select id="auCli"></select></div>
+    <div class="fld"><label>Nota</label><input type="text" id="auNota"></div>
+    <div class="mbtns"><button class="act ghost" onclick="closeModal()">Cancelar</button><button class="act gold" id="auSave">Guardar</button></div>`);
+  const fillCli=()=>{ const vid=val('auVend'); document.getElementById('auCli').innerHTML=STATE.clientes.filter(c=>c.vendedor_id===vid&&c.estatus!=='inactivo').map(c=>`<option value="${c.id}">${esc(c.nombre_comercial)}</option>`).join('')||'<option value="">(sin clientes)</option>'; };
+  document.getElementById('auVend').addEventListener('change',fillCli); fillCli();
+  document.getElementById('auSave').addEventListener('click',()=>{
+    const cli=val('auCli'); if(!cli){ toast('Elige un cliente.','err'); return; }
+    save('gvis_plan_auditorias',{ mes:primerDia(PERIODO), cliente_id:Number(cli), vendedor_id:val('auVend'), nota:val('auNota')||null, creado_por:SESSION.id });
+  });
+}
+
+function reactModal(r){
+  const inactivos=STATE.clientes.filter(c=>c.estatus==='inactivo');
+  openModal(`<h3>${r?'Actualizar':'Elegir'} inactivo · reactivación</h3><p class="mp">${ymLabel(PERIODO)}</p>
+    ${r?`<div class="fld"><label>Cliente</label><input type="text" value="${esc((clienteById(r.cliente_id)||{}).nombre_comercial||'')}" disabled style="background:#f4f1ea;color:var(--muted)"></div>`
+       :(inactivos.length?fldSelect('reCli','Cliente inactivo',inactivos.map(c=>[c.id,c.nombre_comercial]),'')
+                         :`<div class="fld"><label>Cliente inactivo</label><input type="text" value="No hay clientes con estatus inactivo" disabled></div>`)}
+    ${fldSelect('reVend','Asignado a',vendedores().map(v=>[v.id,v.nombre]),r?r.vendedor_id:'')}
+    ${fldSelect('reEst','Estatus',[['por_visitar','Por visitar'],['visitado','Visitado'],['reactivado','Reactivado'],['descartado','Descartado']],r?r.estatus:'por_visitar')}
+    <div class="fld"><label>Motivo / por qué revisitarlo</label><input type="text" id="reMot" value="${r?esc(r.motivo||''):''}"></div>
+    <div class="fld"><label>Resultado / nota</label><textarea id="reRes">${r?esc(r.resultado||''):''}</textarea></div>
+    <div class="mbtns"><button class="act ghost" onclick="closeModal()">Cancelar</button><button class="act gold" id="reSave">Guardar</button></div>`);
+  document.getElementById('reSave').addEventListener('click',async()=>{
+    const cli=r?r.cliente_id:(val('reCli')?Number(val('reCli')):null);
+    if(!cli){ toast('Elige un cliente inactivo.','err'); return; }
+    const nuevoEst=val('reEst');
+    if(nuevoEst==='reactivado'){
+      const c=clienteById(cli);
+      if(c && c.estatus!=='activo'){
+        await db.from('gvis_clientes').update({estatus:'activo'}).eq('id',cli);
+        await db.from('gvis_movimientos_cartera').insert({cliente_id:cli,de_estatus:c.estatus,a_estatus:'activo',de_vendedor:c.vendedor_id,a_vendedor:c.vendedor_id,motivo:'Reactivación '+ymLabel(PERIODO),usuario_id:SESSION.id});
+      }
+    }
+    save('gvis_reactivacion',{ id:r?r.id:undefined, mes:primerDia(PERIODO), cliente_id:cli, vendedor_id:val('reVend')||null,
+      motivo:val('reMot')||null, estatus:nuevoEst, resultado:val('reRes')||null, creado_por:SESSION.id });
+  });
+}
+
+function objModal(o){
+  openModal(`<h3>${o?'Editar':'Nuevo'} objetivo estratégico</h3>
+    <div class="fld"><label>Nombre</label><input type="text" id="obNom" value="${o?esc(o.nombre):''}"></div>
+    <div class="fld"><label>Descripción</label><textarea id="obDesc">${o?esc(o.descripcion||''):''}</textarea></div>
+    <div class="fld2">
+      <div class="fld"><label>Meta</label><input type="text" id="obMeta" value="${o?esc(o.meta||''):''}"></div>
+      <div class="fld"><label>Año</label><input type="number" id="obAnio" value="${o?o.anio:new Date().getFullYear()}"></div>
+    </div>
+    ${fldSelect('obResp','Responsable',[['','—']].concat(STATE.usuarios.map(u=>[u.id,u.nombre])),o?o.responsable_id:'')}
+    ${o?`<div class="fld chkline"><input type="checkbox" id="obAct" ${o.activo?'checked':''}><label>Activo</label></div>`:''}
+    <div class="mbtns"><button class="act ghost" onclick="closeModal()">Cancelar</button><button class="act gold" id="obSave">Guardar</button></div>`);
+  document.getElementById('obSave').addEventListener('click',()=>{
+    const nom=val('obNom'); if(!nom){ toast('Falta nombre.','err'); return; }
+    const payload={ id:o?o.id:undefined, nombre:nom, descripcion:val('obDesc')||null, meta:val('obMeta')||null,
+      anio:Number(val('obAnio'))||new Date().getFullYear(), responsable_id:val('obResp')||null };
+    if(o) payload.activo=chk('obAct');
+    save('gvis_objetivos',payload);
+  });
+}
+
+function corteResModal(objId, cuatri){
+  const o=STATE.objetivos.find(x=>x.id===objId);
+  const cr=STATE.cortesR.find(x=>x.cuatrimestre===cuatri && x.objetivo_id===objId);
+  openModal(`<h3>Corte cuatrimestral · ${cuatri}</h3><p class="mp">${esc(o?o.nombre:'')}</p>
+    <div class="fld"><label>Avance %</label><input type="number" id="crAv" min="0" max="100" value="${cr?cr.avance_pct:0}"></div>
+    <div class="fld"><label>Resultado</label><textarea id="crRes">${cr?esc(cr.resultado||''):''}</textarea></div>
+    <div class="fld"><label>Decisión / siguiente paso</label><input type="text" id="crDec" value="${cr?esc(cr.decision||''):''}"></div>
+    <div class="mbtns"><button class="act ghost" onclick="closeModal()">Cancelar</button><button class="act gold" id="crSave">Guardar</button></div>`);
+  document.getElementById('crSave').addEventListener('click',async()=>{
+    const payload={ cuatrimestre:cuatri, objetivo_id:objId, avance_pct:Number(val('crAv'))||0,
+      resultado:val('crRes')||null, decision:val('crDec')||null, decidido_por:SESSION.id, fecha_decision:new Date().toISOString() };
+    try{
+      if(cr){ await db.from('gvis_cortes_resultados').update(payload).eq('id',cr.id); }
+      else { await db.from('gvis_cortes_resultados').insert(payload); }
+      closeModal(); toast('Corte registrado.','ok'); await reload();
+    }catch(e){ console.error(e); toast('Error: '+(e.message||e),'err'); }
   });
 }
 window.closeModal=closeModal;
