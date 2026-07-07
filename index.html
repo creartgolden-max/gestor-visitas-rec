@@ -320,7 +320,7 @@ async function reload(){ await loadData(); render(); }
    ===================================================================== */
 function tabsFor(rol){
   if(rol==='vendedor')    return [['visitas','Mi Día'],['plan','Mi Plan'],['auditorias','Auditorías'],['estrella','Estrella'],['reactivacion','Inactivos'],['clientes','Mi Cartera'],['prospectos','Prospectos'],['buscados','Más Buscados']];
-  if(rol==='coordinador') return [['visitas','Mi Día'],['tablero','Tablero'],['plan','Plan'],['auditorias','Auditorías'],['estrella','Estrella'],['reactivacion','Inactivos'],['clientes','Clientes'],['cotizaciones','Cotizaciones'],['prospectos','Prospectos'],['buscados','Más Buscados'],['cortes','Cortes'],['reportes','Reportes']];
+  if(rol==='coordinador') return [['visitas','Mi Día'],['tablero','Tablero'],['plan','Plan'],['auditorias','Auditorías'],['estrella','Estrella'],['reactivacion','Inactivos'],['clientes','Clientes'],['cotizaciones','Cotizaciones'],['prospectos','Prospectos'],['buscados','Más Buscados'],['cortes','Cortes']];
   if(rol==='admin')       return [['consolidado','Consolidado'],['cotizaciones','Cotizaciones'],['compras','Compras'],['reactivacion','Inactivos'],['clientes','Clientes'],['estrella','Estrella'],['catalogos','Catálogos'],['config','Umbrales'],['usuarios','Usuarios'],['reportes','Reportes']];
   return [['consolidado','Consolidado'],['cotizaciones','Cotizaciones'],['objetivos','Objetivos'],['estrella','Estrella'],['clientes','Clientes'],['cortes','Cortes'],['buscados','Más Buscados'],['reportes','Reportes']]; // direccion
 }
