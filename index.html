@@ -235,6 +235,7 @@ function hoyStr(){ const d=new Date(); return d.getFullYear()+'-'+String(d.getMo
 function fmtFecha(s){ if(!s) return ''; const p=String(s).slice(0,10).split('-'); return p[2]+'/'+p[1]+'/'+p[0]; }
 function ymActual(){ const d=new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0'); }
 function primerDia(ym){ return ym+'-01'; }
+function finDeMes(ym){ const p=ym.split('-'); const d=new Date(Number(p[0]), Number(p[1]), 0); return p[0]+'-'+p[1]+'-'+String(d.getDate()).padStart(2,'0'); }
 function ymLabel(ym){ const [y,m]=ym.split('-'); return MES[parseInt(m,10)-1]+' '+y; }
 function lunesDe(dstr){ const d=new Date(dstr+'T00:00:00'); const dia=(d.getDay()+6)%7; d.setDate(d.getDate()-dia); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
 function addDays(dstr,n){ const d=new Date(dstr+'T00:00:00'); d.setDate(d.getDate()+n); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
@@ -364,8 +365,7 @@ function viewVisitas(){
   const delDia=STATE.visitas.filter(v=>v.vendedor_id===uid && v.fecha===hoy);
   const realiz=delDia.filter(v=>v.realizada).length;
   const ym=PERIODO, ini=primerDia(ym);
-  const finMes=new Date(new Date(ini).getFullYear(), new Date(ini).getMonth()+1, 0);
-  const finStr=finMes.getFullYear()+'-'+String(finMes.getMonth()+1).padStart(2,'0')+'-'+String(finMes.getDate()).padStart(2,'0');
+  const finStr=finDeMes(ym);
   const delMes=STATE.visitas.filter(v=>v.vendedor_id===uid && v.fecha>=ini && v.fecha<=finStr && v.realizada);
   const planMes=STATE.planMensual.filter(p=>p.vendedor_id===uid && String(p.mes).slice(0,7)===ym).reduce((a,p)=>a+p.cantidad,0);
   const cumpl = planMes ? Math.round(delMes.length/planMes*100) : 0;
@@ -458,15 +458,15 @@ function viewPlan(){
     .sort((a,b)=>{ const ca=clienteById(a.cliente_id), cb=clienteById(b.cliente_id); return (ca?ca.nombre_comercial:'').localeCompare(cb?cb.nombre_comercial:''); });
 
   h+=`<div class="card"><div class="chead"><div class="t"><small>${ymLabel(ym)} · ${esc(usuarioNombre(uid))}</small>Plan mensual por cliente</div></div>
-    <div class="tblwrap"><table class="grid"><thead><tr><th>Cliente</th><th>Tipo</th><th>Cantidad</th><th>Realizadas</th>${soloLectura?'':'<th></th>'}</tr></thead><tbody>`;
-  if(!planM.length) h+=`<tr><td colspan="${soloLectura?4:5}"><div class="empty" style="padding:8px 0">Sin plan cargado para este mes.</div></td></tr>`;
+    <div class="tblwrap"><table class="grid"><thead><tr><th>Cliente</th><th>Tipo</th><th>Semana</th><th>Cantidad</th><th>Realizadas</th>${soloLectura?'':'<th></th>'}</tr></thead><tbody>`;
+  if(!planM.length) h+=`<tr><td colspan="${soloLectura?5:6}"><div class="empty" style="padding:8px 0">Sin plan cargado para este mes.</div></td></tr>`;
   else h+=planM.map(p=>{
     const c=clienteById(p.cliente_id), t=tipoById(p.tipo_visita_id);
-    const ini=primerDia(ym); const f=new Date(ini); const fin=new Date(f.getFullYear(),f.getMonth()+1,0);
-    const finStr=fin.getFullYear()+'-'+String(fin.getMonth()+1).padStart(2,'0')+'-'+String(fin.getDate()).padStart(2,'0');
+    const ini=primerDia(ym); const finStr=finDeMes(ym);
     const hechas=STATE.visitas.filter(v=>v.vendedor_id===uid && v.cliente_id===p.cliente_id && v.tipo_visita_id===p.tipo_visita_id && v.realizada && v.fecha>=ini && v.fecha<=finStr).length;
     return `<tr><td><span class="nm">${esc(c?c.nombre_comercial:'—')}</span></td>
       <td>${t?`<span class="badge ${t.letra}">${esc(t.nombre)}</span>`:'—'}</td>
+      <td>${p.semana?('<span class="badge marca">Sem '+p.semana+'</span>'):'<span style="color:var(--muted)">—</span>'}</td>
       <td>${p.cantidad}</td>
       <td><b style="color:${hechas>=p.cantidad?'var(--ok)':'var(--warn)'}">${hechas}</b></td>
       ${soloLectura?'':`<td><div class="rowbtns"><button class="act ghost sm" data-act="editPlanM" data-id="${p.id}">Editar</button><button class="act danger sm" data-act="delPlanM" data-id="${p.id}">✕</button></div></td>`}</tr>`;
@@ -609,8 +609,7 @@ function viewBuscados(){
    ===================================================================== */
 function viewTablero(){
   const ym=PERIODO, ini=primerDia(ym);
-  const f=new Date(ini), fin=new Date(f.getFullYear(),f.getMonth()+1,0);
-  const finStr=fin.getFullYear()+'-'+String(fin.getMonth()+1).padStart(2,'0')+'-'+String(fin.getDate()).padStart(2,'0');
+  const finStr=finDeMes(ym);
   const vends=vendedores();
 
   let h=`<div class="stats">
@@ -780,8 +779,7 @@ function viewUsuarios(){
    ===================================================================== */
 function viewConsolidado(){
   const ym=PERIODO, ini=primerDia(ym);
-  const f=new Date(ini), fin=new Date(f.getFullYear(),f.getMonth()+1,0);
-  const finStr=fin.getFullYear()+'-'+String(fin.getMonth()+1).padStart(2,'0')+'-'+String(fin.getDate()).padStart(2,'0');
+  const finStr=finDeMes(ym);
   const comprasMes=STATE.compras.filter(c=>String(c.mes).slice(0,10)===ini);
   const totalCompra=comprasMes.reduce((a,c)=>a+Number(c.monto||0),0);
   const lunC=lunesDe(hoyStr()), domC=addDays(lunC,6);
@@ -872,7 +870,7 @@ function viewAuditorias(){
         const c=clienteById(a.cliente_id);
         const ec={planeada:'mostrador',realizada:'activo',cancelada:'inactivo'}[a.estatus];
         return `<div class="trow"><div class="body"><div class="ti ${a.estatus==='realizada'?'done':''}">${esc(c?c.nombre_comercial:'—')}</div>
-          <div class="meta"><span class="badge est-${ec}">${a.estatus}</span>${a.fecha_realizada?' · '+fmtFecha(a.fecha_realizada):''}${a.nota?' · '+esc(a.nota):''}</div></div>
+          <div class="meta"><span class="badge est-${ec}">${a.estatus}</span>${a.fecha_propuesta?' · Propuesta: '+fmtFecha(a.fecha_propuesta):''}${a.fecha_realizada?' · Realizada: '+fmtFecha(a.fecha_realizada):''}${a.nota?' · '+esc(a.nota):''}</div></div>
           <div class="rowbtns">
             ${a.estatus==='planeada'?`<button class="act ghost sm" data-act="audRealizada" data-id="${a.id}">Marcar realizada</button>`:''}
             ${puedeEditar?`<button class="act danger sm" data-act="delAud" data-id="${a.id}">✕</button>`:''}
@@ -900,9 +898,9 @@ function viewReactivacion(){
     <div class="cbody">`;
   if(!lista.length) h+=`<div class="empty">Sin inactivos elegidos para este mes.</div>`;
   else h+=lista.map(r=>{
-    const c=clienteById(r.cliente_id);
+    const nombreCli=r.cliente_id?((clienteById(r.cliente_id)||{}).nombre_comercial||'#'+r.cliente_id):(r.nombre_libre||'—');
     return `<div class="trow"><div class="body">
-      <div class="ti ${r.estatus==='reactivado'?'done':''}">${esc(c?c.nombre_comercial:'—')}</div>
+      <div class="ti ${r.estatus==='reactivado'?'done':''}">${esc(nombreCli)}${r.cliente_id?'':' <span class="chipmini libre" style="margin:0">manual</span>'}</div>
       <div class="meta"><span class="badge est-${estClass[r.estatus]||'mostrador'}">${estLabel[r.estatus]||r.estatus}</span> · ${esc(usuarioNombre(r.vendedor_id))}${r.motivo?' · '+esc(r.motivo):''}${r.resultado?' · '+esc(r.resultado):''}</div>
     </div>
     <div class="rowbtns">
@@ -1050,8 +1048,7 @@ function buildReportSemanal(){
 }
 function buildReportMensual(){
   const ym=PERIODO, ini=primerDia(ym);
-  const f=new Date(ini), fin=new Date(f.getFullYear(),f.getMonth()+1,0);
-  const finStr=fin.getFullYear()+'-'+String(fin.getMonth()+1).padStart(2,'0')+'-'+String(fin.getDate()).padStart(2,'0');
+  const finStr=finDeMes(ym);
   let body=`<div class="rhead"><div class="rbrand">Recouromex · Gestión Comercial</div><h1>Reporte mensual — ${ymLabel(ym)}</h1>
     <div class="rsub">Generado ${fmtFecha(hoyStr())}</div></div>`;
   let mesTot=0; const catGM={};
@@ -1286,11 +1283,14 @@ function planMModal(p,vend){
     <p class="mp">${ymLabel(PERIODO)} · ${esc(usuarioNombre(uid))}</p>
     ${fldSelect('pmCli','Cliente',optClientes(uid),p?p.cliente_id:'')}
     ${fldSelect('pmTipo','Tipo de visita',optTipos(),p?p.tipo_visita_id:'')}
-    <div class="fld"><label>Cantidad al mes</label><input type="number" id="pmCant" min="1" value="${p?p.cantidad:1}"></div>
+    <div class="fld2">
+      <div class="fld"><label>Cantidad al mes</label><input type="number" id="pmCant" min="1" value="${p?p.cantidad:1}"></div>
+      ${fldSelect('pmSem','Semana sugerida',[['','— sin especificar —'],['1','Semana 1'],['2','Semana 2'],['3','Semana 3'],['4','Semana 4']],p?(p.semana||''):'')}
+    </div>
     <div class="mbtns"><button class="act ghost" onclick="closeModal()">Cancelar</button><button class="act gold" id="pmSave">Guardar</button></div>`);
   document.getElementById('pmSave').addEventListener('click',()=>{
     const payload={ id:p?p.id:undefined, mes:primerDia(PERIODO), cliente_id:Number(val('pmCli')), vendedor_id:uid,
-      tipo_visita_id:Number(val('pmTipo')), cantidad:Number(val('pmCant'))||1, creado_por:SESSION.id };
+      tipo_visita_id:Number(val('pmTipo')), cantidad:Number(val('pmCant'))||1, semana:val('pmSem')?Number(val('pmSem')):null, creado_por:SESSION.id };
     save('gvis_plan_mensual',payload);
   });
 }
@@ -1478,22 +1478,23 @@ function audModal(){
   openModal(`<h3>Auditoría técnica planeada</h3><p class="mp">${ymLabel(PERIODO)} · inicio de mes</p>
     ${fldSelect('auVend','Vendedor',vendedores().map(v=>[v.id,v.nombre]),'')}
     <div class="fld"><label>Cliente</label><select id="auCli"></select></div>
+    <div class="fld"><label>Fecha propuesta (cuándo se propone hacerla)</label><input type="date" id="auFecha"></div>
     <div class="fld"><label>Nota</label><input type="text" id="auNota"></div>
     <div class="mbtns"><button class="act ghost" onclick="closeModal()">Cancelar</button><button class="act gold" id="auSave">Guardar</button></div>`);
   const fillCli=()=>{ const vid=val('auVend'); document.getElementById('auCli').innerHTML=STATE.clientes.filter(c=>c.vendedor_id===vid&&c.estatus!=='inactivo').map(c=>`<option value="${c.id}">${esc(c.nombre_comercial)}</option>`).join('')||'<option value="">(sin clientes)</option>'; };
   document.getElementById('auVend').addEventListener('change',fillCli); fillCli();
   document.getElementById('auSave').addEventListener('click',()=>{
     const cli=val('auCli'); if(!cli){ toast('Elige un cliente.','err'); return; }
-    save('gvis_plan_auditorias',{ mes:primerDia(PERIODO), cliente_id:Number(cli), vendedor_id:val('auVend'), nota:val('auNota')||null, creado_por:SESSION.id });
+    save('gvis_plan_auditorias',{ mes:primerDia(PERIODO), cliente_id:Number(cli), vendedor_id:val('auVend'), fecha_propuesta:val('auFecha')||null, nota:val('auNota')||null, creado_por:SESSION.id });
   });
 }
 
 function reactModal(r){
   const inactivos=STATE.clientes.filter(c=>c.estatus==='inactivo');
   openModal(`<h3>${r?'Actualizar':'Elegir'} inactivo · reactivación</h3><p class="mp">${ymLabel(PERIODO)}</p>
-    ${r?`<div class="fld"><label>Cliente</label><input type="text" value="${esc((clienteById(r.cliente_id)||{}).nombre_comercial||'')}" disabled style="background:#f4f1ea;color:var(--muted)"></div>`
-       :(inactivos.length?fldSelect('reCli','Cliente inactivo',inactivos.map(c=>[c.id,c.nombre_comercial]),'')
-                         :`<div class="fld"><label>Cliente inactivo</label><input type="text" value="No hay clientes con estatus inactivo" disabled></div>`)}
+    ${r?`<div class="fld"><label>Cliente</label><input type="text" value="${esc(r.cliente_id?((clienteById(r.cliente_id)||{}).nombre_comercial||''):(r.nombre_libre||''))}" disabled style="background:#f4f1ea;color:var(--muted)"></div>`
+       :`${inactivos.length?fldSelect('reCli','Cliente inactivo (del sistema)',[['','— elige o deja en blanco —']].concat(inactivos.map(c=>[c.id,c.nombre_comercial])),''):'<div class="fld"><label>Cliente inactivo (del sistema)</label><input type="text" value="No hay clientes inactivos en el sistema" disabled></div>'}
+          <div class="fld"><label>O agregar manual (no está en el sistema)</label><input type="text" id="reManual" placeholder="Nombre del cliente inactivo" autocomplete="off"></div>`}
     ${fldSelect('reVend','Asignado a',vendedores().map(v=>[v.id,v.nombre]),r?r.vendedor_id:'')}
     ${fldSelect('reEst','Estatus',[['por_visitar','Por visitar'],['visitado','Visitado'],['reactivado','Reactivado'],['descartado','Descartado']],r?r.estatus:'por_visitar')}
     <div class="fld"><label>Motivo / por qué revisitarlo</label><input type="text" id="reMot" value="${r?esc(r.motivo||''):''}"></div>
@@ -1501,17 +1502,19 @@ function reactModal(r){
     <div class="mbtns"><button class="act ghost" onclick="closeModal()">Cancelar</button><button class="act gold" id="reSave">Guardar</button></div>`);
   document.getElementById('reSave').addEventListener('click',async()=>{
     const cli=r?r.cliente_id:(val('reCli')?Number(val('reCli')):null);
-    if(!cli){ toast('Elige un cliente inactivo.','err'); return; }
+    const manual=r?null:(val('reManual')||null);
+    if(!r && !cli && !manual){ toast('Elige un cliente inactivo o escribe uno manual.','err'); return; }
     const nuevoEst=val('reEst');
-    if(nuevoEst==='reactivado'){
+    if(nuevoEst==='reactivado' && cli){
       const c=clienteById(cli);
       if(c && c.estatus!=='activo'){
         await db.from('gvis_clientes').update({estatus:'activo'}).eq('id',cli);
         await db.from('gvis_movimientos_cartera').insert({cliente_id:cli,de_estatus:c.estatus,a_estatus:'activo',de_vendedor:c.vendedor_id,a_vendedor:c.vendedor_id,motivo:'Reactivación '+ymLabel(PERIODO),usuario_id:SESSION.id});
       }
     }
-    save('gvis_reactivacion',{ id:r?r.id:undefined, mes:primerDia(PERIODO), cliente_id:cli, vendedor_id:val('reVend')||null,
-      motivo:val('reMot')||null, estatus:nuevoEst, resultado:val('reRes')||null, creado_por:SESSION.id });
+    const payload={ id:r?r.id:undefined, vendedor_id:val('reVend')||null, motivo:val('reMot')||null, estatus:nuevoEst, resultado:val('reRes')||null };
+    if(!r){ payload.mes=primerDia(PERIODO); payload.cliente_id=cli||null; payload.nombre_libre=cli?null:manual; payload.creado_por=SESSION.id; }
+    save('gvis_reactivacion',payload);
   });
 }
 
