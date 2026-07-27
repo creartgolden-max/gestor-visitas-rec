@@ -979,6 +979,11 @@ function viewReportes(){
           <p style="font-family:Arial;font-size:12.5px;color:var(--muted)">Cumplimiento al plan, prospectos, auditorías técnicas y a quiénes, cotizaciones y ventas del mes, por vendedor.</p>
           <button class="act gold" data-act="repMensual" style="margin-top:10px">Generar PDF mensual</button>
         </div></div>
+        <div class="card" style="margin:0"><div class="cpad">
+          <div class="sechead" style="padding:0 0 6px">Productos estrella · ${ymLabel(ym)}</div>
+          <p style="font-family:Arial;font-size:12.5px;color:var(--muted)">Productos estrella del mes, seguimiento y observaciones del vendedor, y clientes a los que se ofrece.</p>
+          <button class="act gold" data-act="repEstrella" style="margin-top:10px">Generar PDF estrella</button>
+        </div></div>
       </div>
     </div></div>`;
 }
@@ -1082,6 +1087,29 @@ function buildReportMensual(){
     if(cot.length) body+=`<div class="rlab">Cotizaciones</div><ul>${cot.map(c=>`<li>${esc(cotizCli(c))} <span class="rmut">— ${money(c.monto)}, ${c.probabilidad}, ${c.estatus}</span></li>`).join('')}</ul>`;
   });
   body+=`<div class="rgrand">Total de visitas del mes: <b>${mesTot}</b><br><span style="font-size:12.5px;font-family:Arial">Acumulado por categoría — ${Object.keys(catGM).map(k=>esc(k)+': '+catGM[k]).join(' · ')||'—'}</span></div>`;
+  return body;
+}
+function buildReportEstrella(){
+  const ym=PERIODO, mes=primerDia(ym);
+  let body=`<div class="rhead"><div class="rbrand">Recouromex · Gestión Comercial</div><h1>Productos estrella — ${ymLabel(ym)}</h1>
+    <div class="rsub">Seguimiento y observaciones del vendedor · generado ${fmtFecha(hoyStr())}</div></div>`;
+  const todas=STATE.estrellas.filter(e=>String(e.mes).slice(0,10)===mes);
+  if(!todas.length){ body+=`<p class="rempty">Sin productos estrella este mes.</p>`; return body; }
+  vendedores().forEach(v=>{
+    const list=todas.filter(e=>e.vendedor_id===v.id);
+    if(!list.length) return;
+    body+=`<h2>${esc(v.nombre)} <span class="rtot">${list.length} producto(s)</span></h2>`;
+    list.forEach(e=>{
+      const m=marcaById(e.marca_id);
+      const cli=STATE.estrellasCli.filter(x=>x.estrella_id===e.id)
+        .map(x=>x.cliente_id?((clienteById(x.cliente_id)||{}).nombre_comercial||'#'+x.cliente_id):(x.nombre_libre||'—'));
+      body+=`<div class="rlab">★ ${esc(e.producto)}${m?' — '+esc(m.nombre):''}</div>`;
+      body+=`<table><tbody>`;
+      body+=`<tr><td style="width:36%">Seguimiento / observaciones</td><td>${e.nota?esc(e.nota):'<span class="rmut">sin observaciones</span>'}</td></tr>`;
+      body+=`<tr><td>Clientes a ofrecer (${cli.length})</td><td>${cli.length?cli.map(esc).join(' · '):'<span class="rmut">sin clientes</span>'}</td></tr>`;
+      body+=`</tbody></table>`;
+    });
+  });
   return body;
 }
 
@@ -1214,7 +1242,8 @@ const ACTIONS={
 
   /* ---- REPORTES ---- */
   repSemanal(){ openPrint('Reporte semanal · Recouromex', buildReportSemanal()); },
-  repMensual(){ openPrint('Reporte mensual · Recouromex', buildReportMensual()); }
+  repMensual(){ openPrint('Reporte mensual · Recouromex', buildReportMensual()); },
+  repEstrella(){ openPrint('Reporte productos estrella · Recouromex', buildReportEstrella()); }
 };
 
 async function userUpsert(args){
@@ -1562,7 +1591,7 @@ function estrellaModal(e){
     <div class="fld"><label>Producto</label><input type="text" id="esProd" value="${e?esc(e.producto):''}"></div>
     ${fldSelect('esMarca','Marca (opcional)',optMarcas(),e?e.marca_id:'')}
     ${esVendedor()?'':fldSelect('esVend','Vendedor',vendedores().map(v=>[v.id,v.nombre]),vd)}
-    <div class="fld"><label>Nota</label><input type="text" id="esNota" value="${e?esc(e.nota||''):''}"></div>
+    <div class="fld"><label>Seguimiento / observaciones</label><textarea id="esNota">${e?esc(e.nota||''):''}</textarea></div>
     <div class="mbtns"><button class="act ghost" onclick="closeModal()">Cancelar</button><button class="act gold" id="esSave">Guardar</button></div>`);
   document.getElementById('esSave').addEventListener('click',()=>{
     const prod=val('esProd'); if(!prod){ toast('Escribe el producto.','err'); return; }
