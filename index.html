@@ -522,14 +522,15 @@ function viewClientes(){
       ${puedeEditar?`<button class="act sm" data-act="nuevoCliente">+ Cliente</button>`:''}
     </div></div>`;
 
-  h+=`<div class="card"><div class="tblwrap"><table class="grid"><thead><tr><th>Cód.</th><th>Cliente</th><th>Razón social</th><th>Vendedor</th><th>Estatus</th><th>Alta</th>${puedeEditar?'<th></th>':''}</tr></thead><tbody>`;
-  if(!lista.length) h+=`<tr><td colspan="7"><div class="empty" style="padding:8px 0">Sin resultados.</div></td></tr>`;
+  h+=`<div class="card"><div class="tblwrap"><table class="grid"><thead><tr><th>Cód.</th><th>Cliente</th><th>Razón social</th><th>Vendedor</th><th>Estatus</th><th>Requisitos</th><th>Alta</th>${puedeEditar?'<th></th>':''}</tr></thead><tbody>`;
+  if(!lista.length) h+=`<tr><td colspan="8"><div class="empty" style="padding:8px 0">Sin resultados.</div></td></tr>`;
   else h+=lista.map(c=>`<tr>
       <td>${esc(c.codigo||'')}</td>
       <td><span class="nm">${esc(c.nombre_comercial)}</span></td>
       <td style="color:var(--muted)">${esc(c.razon_social||'')}</td>
       <td>${esc(usuarioNombre(c.vendedor_id))}</td>
       <td><span class="badge est-${c.estatus}">${c.estatus}</span></td>
+      <td style="white-space:nowrap"><span class="badge est-${c.ficha_tecnica?'activo':'mostrador'}" title="Ficha técnica">F</span> <span class="badge est-${c.politica_firmada?'activo':'mostrador'}" title="Política firmada">P</span> <span class="badge est-${c.correo?'activo':'mostrador'}" title="Correo">C</span></td>
       <td style="color:var(--muted)">${fmtFecha(c.fecha_alta)}</td>
       ${puedeEditar?`<td><div class="rowbtns"><button class="act ghost sm" data-act="editCliente" data-id="${c.id}">Editar</button></div></td>`:''}
     </tr>`).join('');
@@ -1359,6 +1360,11 @@ function clienteModal(c){
     <div class="fld"><label>Nombre comercial</label><input type="text" id="cNom" value="${c?esc(c.nombre_comercial):''}"></div>
     <div class="fld"><label>Razón social</label><input type="text" id="cRaz" value="${c?esc(c.razon_social||''):''}"></div>
     ${fldSelect('cVend','Vendedor',vendedores().map(v=>[v.id,v.nombre]),c?c.vendedor_id:'')}
+    <div class="fld"><label>Requisitos del cliente</label>
+      <div class="fld chkline"><input type="checkbox" id="cFicha" ${c&&c.ficha_tecnica?'checked':''}><label>Ficha técnica</label></div>
+      <div class="fld chkline"><input type="checkbox" id="cPol" ${c&&c.politica_firmada?'checked':''}><label>Política firmada</label></div>
+      <div class="fld chkline" style="margin-bottom:0"><input type="checkbox" id="cCorreo" ${c&&c.correo?'checked':''}><label>Correo</label></div>
+    </div>
     <div class="fld"><label>Nota</label><textarea id="cNota">${c?esc(c.nota||''):''}</textarea></div>
     <div class="mbtns"><button class="act ghost" onclick="closeModal()">Cancelar</button><button class="act gold" id="cSave">Guardar</button></div>`);
   document.getElementById('cSave').addEventListener('click',async()=>{
@@ -1370,7 +1376,8 @@ function clienteModal(c){
         de_estatus:c.estatus, a_estatus:nuevoEst, motivo:'Edición manual', usuario_id:SESSION.id });
     }
     save('gvis_clientes',{ id:c?c.id:undefined, codigo:val('cCod')||null, nombre_comercial:nom,
-      razon_social:val('cRaz')||null, vendedor_id:nuevoVend, estatus:nuevoEst, nota:val('cNota')||null });
+      razon_social:val('cRaz')||null, vendedor_id:nuevoVend, estatus:nuevoEst, nota:val('cNota')||null,
+      ficha_tecnica:chk('cFicha'), politica_firmada:chk('cPol'), correo:chk('cCorreo') });
   });
 }
 
