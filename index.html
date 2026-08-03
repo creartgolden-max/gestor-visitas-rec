@@ -1063,6 +1063,18 @@ function buildReportSemanal(){
   const una = weeks.length===1;
   let body=`<div class="rhead"><div class="rbrand">Recouromex · Gestión Comercial</div><h1>Reporte semanal de visitas</h1>
     <div class="rsub">${una?('Semana del '+fmtFecha(weeks[0].lun)+' al '+fmtFecha(weeks[0].dom)):(ymLabel(PERIODO)+' · desglose por semana')} · generado ${fmtFecha(hoyStr())}</div></div>`;
+  // Plan vs realizado (lo que planificó hacer vs lo que hizo), por vendedor
+  const lunSet=new Set(weeks.map(w=>w.lun));
+  body+=`<h2>Plan vs realizado ${una?'(semana)':'('+ymLabel(PERIODO)+')'}</h2>`;
+  body+=`<table class="rmini"><thead><tr><th style="text-align:left">Vendedor</th><th>Planeadas</th><th>Realizadas</th><th>Cumplimiento</th></tr></thead><tbody>`;
+  vendedores().forEach(v=>{
+    const planeadas=STATE.planSemanal.filter(p=>p.vendedor_id===v.id && lunSet.has(String(p.semana_inicio).slice(0,10))).length;
+    const realizadas=weeks.reduce((acc,w)=>acc+STATE.visitas.filter(x=>x.vendedor_id===v.id && x.realizada && x.fecha>=w.lun && x.fecha<=w.dom).length,0);
+    const pct=planeadas?Math.round(realizadas/planeadas*100):0;
+    const col=!planeadas?'#6b6457':pct>=90?'#2e7d4f':pct>=70?'#c9952b':'#b53a2e';
+    body+=`<tr><td>${esc(v.nombre)}</td><td class="rnum">${planeadas}</td><td class="rnum">${realizadas}</td><td class="rnum" style="color:${col}"><b>${planeadas?pct+'%':'—'}</b></td></tr>`;
+  });
+  body+=`</tbody></table>`;
   let gran=0; const catGtot={};
   weeks.forEach(w=>{
     if(!una) body+=`<div class="rlab" style="margin-top:14px;font-size:12px;border-bottom:1px solid #d9d3c6;padding-bottom:3px">Semana ${w.n} · ${fmtFecha(w.lun)} al ${fmtFecha(w.dom)}</div>`;
