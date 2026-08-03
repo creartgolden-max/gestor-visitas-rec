@@ -236,6 +236,7 @@ function fmtFecha(s){ if(!s) return ''; const p=String(s).slice(0,10).split('-')
 function ymActual(){ const d=new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0'); }
 function primerDia(ym){ return ym+'-01'; }
 function finDeMes(ym){ const p=ym.split('-'); const d=new Date(Number(p[0]), Number(p[1]), 0); return p[0]+'-'+p[1]+'-'+String(d.getDate()).padStart(2,'0'); }
+function semanasDelPeriodo(){ const fin=finDeMes(PERIODO); let lun=lunesDe(primerDia(PERIODO)); const arr=[]; let i=1; while(lun<=fin){ arr.push({lun, dom:addDays(lun,6), n:i}); lun=addDays(lun,7); i++; } return arr; }
 function ymLabel(ym){ const [y,m]=ym.split('-'); return MES[parseInt(m,10)-1]+' '+y; }
 function lunesDe(dstr){ const d=new Date(dstr+'T00:00:00'); const dia=(d.getDay()+6)%7; d.setDate(d.getDate()-dia); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
 function addDays(dstr,n){ const d=new Date(dstr+'T00:00:00'); d.setDate(d.getDate()+n); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
@@ -965,15 +966,22 @@ function viewEstrellas(){
 }
 
 function viewReportes(){
-  const ym=PERIODO, lun=lunesDe(hoyStr()), dom=addDays(lun,6);
+  const ym=PERIODO;
+  const wk=semanasDelPeriodo();
+  const curLun=(PERIODO===ymActual())?lunesDe(hoyStr()):null;
+  const anyCur=curLun && wk.some(w=>w.lun===curLun);
   return `<div class="card"><div class="chead"><div class="t"><small>Impresión / PDF</small>Reportes para junta</div></div>
     <div class="cpad">
       <p style="font-family:Arial;font-size:13px;color:var(--muted);margin-bottom:14px">Genera el reporte y en el diálogo de impresión elige <b>"Guardar como PDF"</b> (o imprime directo).<br><b>Para un mes pasado</b> (ej. Julio) cambia el selector <b>"Periodo"</b> de arriba antes de generar — todos los reportes lo respetan. Tu historial se conserva completo, no se borra.</p>
       <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:14px">
         <div class="card" style="margin:0"><div class="cpad">
-          <div class="sechead" style="padding:0 0 6px">Junta semanal · lunes</div>
-          <p style="font-family:Arial;font-size:12.5px;color:var(--muted)">Visitas por cliente y total general de la semana ${fmtDM(lun)}–${fmtDM(dom)}, por vendedor.</p>
-          <button class="act gold" data-act="repSemanal" style="margin-top:10px">Generar PDF semanal</button>
+          <div class="sechead" style="padding:0 0 6px">Reporte semanal</div>
+          <p style="font-family:Arial;font-size:12.5px;color:var(--muted)">Visitas por cliente y día + prospectos, por vendedor. Elige qué semana consultar:</p>
+          <select id="repWeek" style="width:100%;font-family:Arial;font-size:13px;padding:7px 9px;border:1px solid var(--line);border-radius:8px;background:#fff;margin:8px 0">
+            <option value="todas" ${anyCur?'':'selected'}>Mes completo (todas las semanas)</option>
+            ${wk.map(w=>`<option value="${w.lun}" ${w.lun===curLun?'selected':''}>Semana ${w.n} · ${fmtDM(w.lun)}–${fmtDM(w.dom)}</option>`).join('')}
+          </select>
+          <button class="act gold" data-act="repSemanal" style="margin-top:2px">Generar PDF semanal</button>
         </div></div>
         <div class="card" style="margin:0"><div class="cpad">
           <div class="sechead" style="padding:0 0 6px">Cierre mensual · ${ymLabel(ym)}</div>
@@ -1049,21 +1057,20 @@ function semanaBloque(lun, dom, dias){
 function buildReportSemanal(){
   const nom=['Lun','Mar','Mié','Jue','Vie','Sáb','Dom'];
   const mkDias=(lun)=>{ const a=[]; for(let i=0;i<7;i++){ const f=addDays(lun,i); a.push({f,lbl:nom[i],dm:fmtDM(f)}); } return a; };
-  const esMesActual=(PERIODO===ymActual());
-  const semanas=[];
-  if(esMesActual){ semanas.push(lunesDe(hoyStr())); }
-  else { const fin=finDeMes(PERIODO); let lun=lunesDe(primerDia(PERIODO)); while(lun<=fin){ semanas.push(lun); lun=addDays(lun,7); } }
+  const selEl=document.getElementById('repWeek'); const sel=selEl?selEl.value:'todas';
+  const todasW=semanasDelPeriodo();
+  const weeks = (sel && sel!=='todas') ? [ (todasW.find(x=>x.lun===sel) || {lun:sel,dom:addDays(sel,6),n:1}) ] : todasW;
+  const una = weeks.length===1;
   let body=`<div class="rhead"><div class="rbrand">Recouromex · Gestión Comercial</div><h1>Reporte semanal de visitas</h1>
-    <div class="rsub">${esMesActual?('Semana '+fmtFecha(semanas[0])+' al '+fmtFecha(addDays(semanas[0],6))):(ymLabel(PERIODO)+' · desglose por semana')} · generado ${fmtFecha(hoyStr())}</div></div>`;
+    <div class="rsub">${una?('Semana del '+fmtFecha(weeks[0].lun)+' al '+fmtFecha(weeks[0].dom)):(ymLabel(PERIODO)+' · desglose por semana')} · generado ${fmtFecha(hoyStr())}</div></div>`;
   let gran=0; const catGtot={};
-  semanas.forEach((lun,idx)=>{
-    const dom=addDays(lun,6);
-    if(!esMesActual) body+=`<div class="rlab" style="margin-top:14px;font-size:12px;border-bottom:1px solid #d9d3c6;padding-bottom:3px">Semana ${idx+1} · ${fmtFecha(lun)} al ${fmtFecha(dom)}</div>`;
-    const blk=semanaBloque(lun,dom,mkDias(lun));
+  weeks.forEach(w=>{
+    if(!una) body+=`<div class="rlab" style="margin-top:14px;font-size:12px;border-bottom:1px solid #d9d3c6;padding-bottom:3px">Semana ${w.n} · ${fmtFecha(w.lun)} al ${fmtFecha(w.dom)}</div>`;
+    const blk=semanaBloque(w.lun,w.dom,mkDias(w.lun));
     body+=blk.html; gran+=blk.total;
     Object.keys(blk.catG).forEach(k=>catGtot[k]=(catGtot[k]||0)+blk.catG[k]);
   });
-  body+=`<div class="rgrand">Total ${esMesActual?'general de la semana':('de '+ymLabel(PERIODO))}: <b>${gran}</b> visita(s)<br><span style="font-size:12.5px;font-family:Arial">Acumulado por categoría — ${Object.keys(catGtot).map(k=>esc(k)+': '+catGtot[k]).join(' · ')||'—'}</span></div>`;
+  body+=`<div class="rgrand">Total ${una?'de la semana':('de '+ymLabel(PERIODO))}: <b>${gran}</b> visita(s)<br><span style="font-size:12.5px;font-family:Arial">Acumulado por categoría — ${Object.keys(catGtot).map(k=>esc(k)+': '+catGtot[k]).join(' · ')||'—'}</span></div>`;
   // Seguimiento a prospectos (estado actual del pipeline, por vendedor)
   const conPros=vendedores().filter(v=>STATE.prospectos.some(p=>p.activo && p.vendedor_id===v.id));
   if(conPros.length){
