@@ -993,6 +993,11 @@ function viewReportes(){
           <p style="font-family:Arial;font-size:12.5px;color:var(--muted)">Productos estrella del mes, seguimiento y observaciones del vendedor, y clientes a los que se ofrece.</p>
           <button class="act gold" data-act="repEstrella" style="margin-top:10px">Generar PDF estrella</button>
         </div></div>
+        <div class="card" style="margin:0"><div class="cpad">
+          <div class="sechead" style="padding:0 0 6px">Compras · ${ymLabel(ym)}</div>
+          <p style="font-family:Arial;font-size:12.5px;color:var(--muted)">Clientes que compraron y su monto, por vendedor, con la compra total del mes.</p>
+          <button class="act gold" data-act="repCompras" style="margin-top:10px">Generar PDF compras</button>
+        </div></div>
       </div>
     </div></div>`;
 }
@@ -1177,6 +1182,27 @@ function buildReportEstrella(){
   });
   return body;
 }
+function buildReportCompras(){
+  const ym=PERIODO, mes=primerDia(ym);
+  const compras=STATE.compras.filter(c=>String(c.mes).slice(0,10)===mes);
+  let body=`<div class="rhead"><div class="rbrand">Recouromex · Gestión Comercial</div><h1>Reporte de compras — ${ymLabel(ym)}</h1>
+    <div class="rsub">Ventas del mes por cliente y vendedor · generado ${fmtFecha(hoyStr())}</div></div>`;
+  if(!compras.length){ body+=`<p class="rempty">Sin compras capturadas para este mes.</p>`; return body; }
+  let gran=0, granN=0;
+  vendedores().forEach(v=>{
+    const filas=compras.filter(c=>{ const cl=clienteById(c.cliente_id); return cl && cl.vendedor_id===v.id; });
+    const compraron=filas.filter(c=>c.compro || Number(c.monto)>0);
+    const subtotal=compraron.reduce((a,c)=>a+Number(c.monto||0),0);
+    gran+=subtotal; granN+=compraron.length;
+    body+=`<h2>${esc(v.nombre)} <span class="rtot">${money(subtotal)} · ${compraron.length} compraron</span></h2>`;
+    if(!compraron.length){ body+=`<p class="rempty">Sin compras registradas este mes.</p>`; return; }
+    body+=`<table><thead><tr><th>Cliente</th><th class="rnum">Monto</th></tr></thead><tbody>`;
+    body+=compraron.slice().sort((a,b)=>Number(b.monto)-Number(a.monto)).map(c=>{const cl=clienteById(c.cliente_id); return `<tr><td>${esc(cl?cl.nombre_comercial:'#'+c.cliente_id)}</td><td class="rnum">${money(c.monto)}</td></tr>`;}).join('');
+    body+=`<tr class="rtr"><td>Total ${esc(v.nombre)}</td><td class="rnum">${money(subtotal)}</td></tr></tbody></table>`;
+  });
+  body+=`<div class="rgrand">Compra total del mes: <b>${money(gran)}</b> · ${granN} cliente(s) compraron</div>`;
+  return body;
+}
 
 /* =====================================================================
    MODAL genérico
@@ -1308,7 +1334,8 @@ const ACTIONS={
   /* ---- REPORTES ---- */
   repSemanal(){ openPrint('Reporte semanal · Recouromex', buildReportSemanal()); },
   repMensual(){ openPrint('Reporte mensual · Recouromex', buildReportMensual()); },
-  repEstrella(){ openPrint('Reporte productos estrella · Recouromex', buildReportEstrella()); }
+  repEstrella(){ openPrint('Reporte productos estrella · Recouromex', buildReportEstrella()); },
+  repCompras(){ openPrint('Reporte de compras · Recouromex', buildReportCompras()); }
 };
 
 async function userUpsert(args){
