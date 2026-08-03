@@ -968,7 +968,7 @@ function viewReportes(){
   const ym=PERIODO, lun=lunesDe(hoyStr()), dom=addDays(lun,6);
   return `<div class="card"><div class="chead"><div class="t"><small>Impresión / PDF</small>Reportes para junta</div></div>
     <div class="cpad">
-      <p style="font-family:Arial;font-size:13px;color:var(--muted);margin-bottom:14px">Genera el reporte y en el diálogo de impresión elige <b>"Guardar como PDF"</b> (o imprime directo).</p>
+      <p style="font-family:Arial;font-size:13px;color:var(--muted);margin-bottom:14px">Genera el reporte y en el diálogo de impresión elige <b>"Guardar como PDF"</b> (o imprime directo).<br><b>Para un mes pasado</b> (ej. Julio) cambia el selector <b>"Periodo"</b> de arriba antes de generar — todos los reportes lo respetan. Tu historial se conserva completo, no se borra.</p>
       <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:14px">
         <div class="card" style="margin:0"><div class="cpad">
           <div class="sechead" style="padding:0 0 6px">Junta semanal · lunes</div>
@@ -1025,7 +1025,9 @@ function catResumen(vis){ const m={}; vis.forEach(x=>{ const n=catNombre(x.tipo_
   return Object.keys(m).map(k=>`${esc(k)}: <b>${m[k]}</b>`).join(' · ')||'—'; }
 
 function buildReportSemanal(){
-  const lun=lunesDe(hoyStr()), dom=addDays(lun,6);
+  // Respeta el Periodo: mes en curso -> semana de hoy; mes pasado -> última semana de ese mes.
+  const ref = (PERIODO===ymActual()) ? hoyStr() : finDeMes(PERIODO);
+  const lun=lunesDe(ref), dom=addDays(lun,6);
   const nom=['Lun','Mar','Mié','Jue','Vie','Sáb','Dom'];
   const dias=[]; for(let i=0;i<7;i++){ const f=addDays(lun,i); dias.push({f, lbl:nom[i], dm:fmtDM(f)}); }
   let body=`<div class="rhead"><div class="rbrand">Recouromex · Gestión Comercial</div><h1>Reporte semanal de visitas</h1>
