@@ -1080,6 +1080,16 @@ function buildReportSemanal(){
       body+=`<div class="rlab">${esc(v.nombre)}</div><ul>${pros.map(p=>`<li>${esc(p.nombre)} <span class="rmut">— ${p.tipo}, avance ${p.avance_pct}%</span></li>`).join('')}</ul>`;
     });
   }
+  // Auditorías técnicas del mes (por vendedor)
+  const mesP=primerDia(PERIODO);
+  const conAud=vendedores().filter(v=>STATE.planAud.some(a=>a.vendedor_id===v.id && String(a.mes).slice(0,10)===mesP));
+  if(conAud.length){
+    body+=`<h2 style="margin-top:16px">Auditorías técnicas · ${ymLabel(PERIODO)}</h2>`;
+    conAud.forEach(v=>{
+      const auds=STATE.planAud.filter(a=>a.vendedor_id===v.id && String(a.mes).slice(0,10)===mesP);
+      body+=`<div class="rlab">${esc(v.nombre)}</div><ul>${auds.map(a=>{const c=clienteById(a.cliente_id); return `<li>${esc(c?c.nombre_comercial:'—')} <span class="rmut">— ${a.estatus}${a.fecha_propuesta?', propuesta '+fmtFecha(a.fecha_propuesta):''}${a.fecha_realizada?', realizada '+fmtFecha(a.fecha_realizada):''}</span></li>`;}).join('')}</ul>`;
+    });
+  }
   return body;
 }
 function buildReportMensual(){
@@ -1113,7 +1123,7 @@ function buildReportMensual(){
     const porCli={}; vis.forEach(x=>{ porCli[x.cliente_id]=(porCli[x.cliente_id]||0)+1; });
     const keys=Object.keys(porCli).sort((a,b)=>porCli[b]-porCli[a]);
     if(keys.length){ body+=`<div class="rlab">Visitas por cliente</div><table><thead><tr><th>Cliente</th><th class="rnum">Visitas</th></tr></thead><tbody>${keys.map(cid=>{const c=clienteById(Number(cid));return `<tr><td>${esc(c?c.nombre_comercial:'#'+cid)}</td><td class="rnum">${porCli[cid]}</td></tr>`;}).join('')}<tr class="rtr"><td>Total</td><td class="rnum">${vis.length}</td></tr></tbody></table>`; }
-    if(auds.length) body+=`<div class="rlab">Auditorías técnicas — a quiénes</div><ul>${auds.map(a=>{const c=clienteById(a.cliente_id);return `<li>${esc(c?c.nombre_comercial:'—')} <span class="rmut">${a.estatus}</span></li>`;}).join('')}</ul>`;
+    if(auds.length) body+=`<div class="rlab">Auditorías técnicas — a quiénes</div><ul>${auds.map(a=>{const c=clienteById(a.cliente_id);return `<li>${esc(c?c.nombre_comercial:'—')} <span class="rmut">— ${a.estatus}${a.fecha_propuesta?', propuesta '+fmtFecha(a.fecha_propuesta):''}${a.fecha_realizada?', realizada '+fmtFecha(a.fecha_realizada):''}</span></li>`;}).join('')}</ul>`;
     if(pros.length) body+=`<div class="rlab">Seguimiento a prospectos</div><ul>${pros.map(p=>`<li>${esc(p.nombre)} <span class="rmut">— ${p.tipo}, avance ${p.avance_pct}%</span></li>`).join('')}</ul>`;
     if(cot.length) body+=`<div class="rlab">Cotizaciones</div><ul>${cot.map(c=>`<li>${esc(cotizCli(c))} <span class="rmut">— ${money(c.monto)}, ${c.probabilidad}, ${c.estatus}</span></li>`).join('')}</ul>`;
   });
