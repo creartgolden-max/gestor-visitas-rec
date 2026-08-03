@@ -1024,34 +1024,46 @@ function catNombre(id){ const t=tipoById(id); return t?t.nombre:'Sin tipo'; }
 function catResumen(vis){ const m={}; vis.forEach(x=>{ const n=catNombre(x.tipo_visita_id); m[n]=(m[n]||0)+1; });
   return Object.keys(m).map(k=>`${esc(k)}: <b>${m[k]}</b>`).join(' · ')||'—'; }
 
-function buildReportSemanal(){
-  // Respeta el Periodo: mes en curso -> semana de hoy; mes pasado -> última semana de ese mes.
-  const ref = (PERIODO===ymActual()) ? hoyStr() : finDeMes(PERIODO);
-  const lun=lunesDe(ref), dom=addDays(lun,6);
-  const nom=['Lun','Mar','Mié','Jue','Vie','Sáb','Dom'];
-  const dias=[]; for(let i=0;i<7;i++){ const f=addDays(lun,i); dias.push({f, lbl:nom[i], dm:fmtDM(f)}); }
-  let body=`<div class="rhead"><div class="rbrand">Recouromex · Gestión Comercial</div><h1>Reporte semanal de visitas</h1>
-    <div class="rsub">Semana ${fmtFecha(lun)} al ${fmtFecha(dom)} · generado ${fmtFecha(hoyStr())}</div></div>`;
-  let gran=0; const catG={};
+function semanaBloque(lun, dom, dias){
+  let html='', total=0; const catG={};
   vendedores().forEach(v=>{
     const vis=STATE.visitas.filter(x=>x.vendedor_id===v.id && x.realizada && x.fecha>=lun && x.fecha<=dom);
-    gran+=vis.length;
-    body+=`<h2>${esc(v.nombre)} <span class="rtot">${vis.length} visita(s)</span></h2>`;
-    if(!vis.length){ body+=`<p class="rempty">Sin visitas esta semana.</p>`; return; }
+    total+=vis.length;
+    html+=`<h2>${esc(v.nombre)} <span class="rtot">${vis.length} visita(s)</span></h2>`;
+    if(!vis.length){ html+=`<p class="rempty">Sin visitas esta semana.</p>`; return; }
     const rowsMap={};
     vis.forEach(x=>{ const k=x.cliente_id+'|'+(x.tipo_visita_id||0);
       if(!rowsMap[k]) rowsMap[k]={cli:x.cliente_id,tipo:x.tipo_visita_id,d:{},total:0};
       rowsMap[k].d[x.fecha]=(rowsMap[k].d[x.fecha]||0)+1; rowsMap[k].total++; });
     const rows=Object.values(rowsMap).sort((a,b)=>{ const ca=clienteById(a.cli),cb=clienteById(b.cli); return (ca?ca.nombre_comercial:'').localeCompare(cb?cb.nombre_comercial:''); });
     const dTot={};
-    body+=`<table class="rmini"><thead><tr><th style="text-align:left">Cliente</th><th>Cat.</th>${dias.map(d=>`<th>${d.lbl}<br>${d.dm}</th>`).join('')}<th>Total</th></tr></thead><tbody>`;
-    body+=rows.map(r=>{ const c=clienteById(r.cli), t=tipoById(r.tipo);
+    html+=`<table class="rmini"><thead><tr><th style="text-align:left">Cliente</th><th>Cat.</th>${dias.map(d=>`<th>${d.lbl}<br>${d.dm}</th>`).join('')}<th>Total</th></tr></thead><tbody>`;
+    html+=rows.map(r=>{ const c=clienteById(r.cli), t=tipoById(r.tipo);
       return `<tr><td>${esc(c?c.nombre_comercial:'#'+r.cli)}</td><td class="rnum">${t?esc(t.letra):'—'}</td>${dias.map(d=>{const n=r.d[d.f]||0; dTot[d.f]=(dTot[d.f]||0)+n; return `<td class="rnum">${n||''}</td>`;}).join('')}<td class="rnum"><b>${r.total}</b></td></tr>`; }).join('');
-    body+=`<tr class="rtr"><td>Total día</td><td></td>${dias.map(d=>`<td class="rnum">${dTot[d.f]||0}</td>`).join('')}<td class="rnum">${vis.length}</td></tr></tbody></table>`;
+    html+=`<tr class="rtr"><td>Total día</td><td></td>${dias.map(d=>`<td class="rnum">${dTot[d.f]||0}</td>`).join('')}<td class="rnum">${vis.length}</td></tr></tbody></table>`;
     vis.forEach(x=>{ const n=catNombre(x.tipo_visita_id); catG[n]=(catG[n]||0)+1; });
-    body+=`<div class="rlab">Por categoría — ${esc(v.nombre)}</div><p class="rcat">${catResumen(vis)}</p>`;
+    html+=`<div class="rlab">Por categoría — ${esc(v.nombre)}</div><p class="rcat">${catResumen(vis)}</p>`;
   });
-  body+=`<div class="rgrand">Total general de la semana: <b>${gran}</b> visita(s)<br><span style="font-size:12.5px;font-family:Arial">Acumulado por categoría — ${Object.keys(catG).map(k=>esc(k)+': '+catG[k]).join(' · ')||'—'}</span></div>`;
+  return {html, total, catG};
+}
+function buildReportSemanal(){
+  const nom=['Lun','Mar','Mié','Jue','Vie','Sáb','Dom'];
+  const mkDias=(lun)=>{ const a=[]; for(let i=0;i<7;i++){ const f=addDays(lun,i); a.push({f,lbl:nom[i],dm:fmtDM(f)}); } return a; };
+  const esMesActual=(PERIODO===ymActual());
+  const semanas=[];
+  if(esMesActual){ semanas.push(lunesDe(hoyStr())); }
+  else { const fin=finDeMes(PERIODO); let lun=lunesDe(primerDia(PERIODO)); while(lun<=fin){ semanas.push(lun); lun=addDays(lun,7); } }
+  let body=`<div class="rhead"><div class="rbrand">Recouromex · Gestión Comercial</div><h1>Reporte semanal de visitas</h1>
+    <div class="rsub">${esMesActual?('Semana '+fmtFecha(semanas[0])+' al '+fmtFecha(addDays(semanas[0],6))):(ymLabel(PERIODO)+' · desglose por semana')} · generado ${fmtFecha(hoyStr())}</div></div>`;
+  let gran=0; const catGtot={};
+  semanas.forEach((lun,idx)=>{
+    const dom=addDays(lun,6);
+    if(!esMesActual) body+=`<div class="rlab" style="margin-top:14px;font-size:12px;border-bottom:1px solid #d9d3c6;padding-bottom:3px">Semana ${idx+1} · ${fmtFecha(lun)} al ${fmtFecha(dom)}</div>`;
+    const blk=semanaBloque(lun,dom,mkDias(lun));
+    body+=blk.html; gran+=blk.total;
+    Object.keys(blk.catG).forEach(k=>catGtot[k]=(catGtot[k]||0)+blk.catG[k]);
+  });
+  body+=`<div class="rgrand">Total ${esMesActual?'general de la semana':('de '+ymLabel(PERIODO))}: <b>${gran}</b> visita(s)<br><span style="font-size:12.5px;font-family:Arial">Acumulado por categoría — ${Object.keys(catGtot).map(k=>esc(k)+': '+catGtot[k]).join(' · ')||'—'}</span></div>`;
   return body;
 }
 function buildReportMensual(){
