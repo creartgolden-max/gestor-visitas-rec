@@ -1097,6 +1097,18 @@ function buildReportMensual(){
   const finStr=finDeMes(ym);
   let body=`<div class="rhead"><div class="rbrand">Recouromex · Gestión Comercial</div><h1>Reporte mensual — ${ymLabel(ym)}</h1>
     <div class="rsub">Generado ${fmtFecha(hoyStr())}</div></div>`;
+  // Resumen semana por semana (verificación de lo hecho cada semana)
+  const vendsRS=vendedores(); const sems=semanasDelPeriodo();
+  body+=`<h2>Resumen semana por semana</h2>`;
+  body+=`<table class="rmini"><thead><tr><th style="text-align:left">Semana</th>${vendsRS.map(v=>`<th>${esc(v.nombre.split(' ')[0])}</th>`).join('')}<th>Total</th></tr></thead><tbody>`;
+  const colTot={}; let granRS=0;
+  sems.forEach(w=>{
+    let filaTot=0;
+    const celdas=vendsRS.map(v=>{ const n=STATE.visitas.filter(x=>x.vendedor_id===v.id && x.realizada && x.fecha>=w.lun && x.fecha<=w.dom).length; colTot[v.id]=(colTot[v.id]||0)+n; filaTot+=n; return `<td class="rnum">${n||''}</td>`; }).join('');
+    granRS+=filaTot;
+    body+=`<tr><td>S${w.n} · ${fmtDM(w.lun)}–${fmtDM(w.dom)}</td>${celdas}<td class="rnum"><b>${filaTot}</b></td></tr>`;
+  });
+  body+=`<tr class="rtr"><td>Total mes</td>${vendsRS.map(v=>`<td class="rnum">${colTot[v.id]||0}</td>`).join('')}<td class="rnum">${granRS}</td></tr></tbody></table>`;
   let mesTot=0; const catGM={};
   vendedores().forEach(v=>{
     const plan=STATE.planMensual.filter(p=>p.vendedor_id===v.id && String(p.mes).slice(0,7)===ym).reduce((a,p)=>a+p.cantidad,0);
