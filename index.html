@@ -1064,6 +1064,15 @@ function buildReportSemanal(){
     Object.keys(blk.catG).forEach(k=>catGtot[k]=(catGtot[k]||0)+blk.catG[k]);
   });
   body+=`<div class="rgrand">Total ${esMesActual?'general de la semana':('de '+ymLabel(PERIODO))}: <b>${gran}</b> visita(s)<br><span style="font-size:12.5px;font-family:Arial">Acumulado por categoría — ${Object.keys(catGtot).map(k=>esc(k)+': '+catGtot[k]).join(' · ')||'—'}</span></div>`;
+  // Seguimiento a prospectos (estado actual del pipeline, por vendedor)
+  const conPros=vendedores().filter(v=>STATE.prospectos.some(p=>p.activo && p.vendedor_id===v.id));
+  if(conPros.length){
+    body+=`<h2 style="margin-top:16px">Seguimiento a prospectos</h2>`;
+    conPros.forEach(v=>{
+      const pros=STATE.prospectos.filter(p=>p.activo && p.vendedor_id===v.id);
+      body+=`<div class="rlab">${esc(v.nombre)}</div><ul>${pros.map(p=>`<li>${esc(p.nombre)} <span class="rmut">— ${p.tipo}, avance ${p.avance_pct}%</span></li>`).join('')}</ul>`;
+    });
+  }
   return body;
 }
 function buildReportMensual(){
