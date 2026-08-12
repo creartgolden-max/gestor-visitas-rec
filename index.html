@@ -1107,13 +1107,23 @@ function buildReportSemanal(){
     Object.keys(blk.catG).forEach(k=>catGtot[k]=(catGtot[k]||0)+blk.catG[k]);
   });
   body+=`<div class="rgrand">Total ${una?'de la semana':('de '+ymLabel(PERIODO))}: <b>${gran}</b> visita(s)<br><span style="font-size:12.5px;font-family:Arial">Acumulado por categoría — ${Object.keys(catGtot).map(k=>esc(k)+': '+catGtot[k]).join(' · ')||'—'}</span></div>`;
-  // Seguimiento a prospectos (estado actual del pipeline, por vendedor)
+  // Seguimiento a prospectos: avance + las anotaciones del vendedor (de la semana, o la última)
+  const rangeIni=weeks[0].lun, rangeFin=weeks[weeks.length-1].dom;
   const conPros=vendedores().filter(v=>STATE.prospectos.some(p=>p.activo && p.vendedor_id===v.id));
   if(conPros.length){
     body+=`<h2 style="margin-top:16px">Seguimiento a prospectos</h2>`;
     conPros.forEach(v=>{
       const pros=STATE.prospectos.filter(p=>p.activo && p.vendedor_id===v.id);
-      body+=`<div class="rlab">${esc(v.nombre)}</div><ul>${pros.map(p=>`<li>${esc(p.nombre)} <span class="rmut">— ${p.tipo}, avance ${p.avance_pct}%</span></li>`).join('')}</ul>`;
+      body+=`<div class="rlab">${esc(v.nombre)}</div><ul>`;
+      pros.forEach(p=>{
+        const logs=STATE.prospLog.filter(l=>l.prospecto_id===p.id).sort((a,b)=>String(b.fecha).localeCompare(String(a.fecha)));
+        const enSem=logs.filter(l=>String(l.fecha).slice(0,10)>=rangeIni && String(l.fecha).slice(0,10)<=rangeFin);
+        const notas=enSem.length?enSem:(logs.length?[logs[0]]:[]);
+        const obs=notas.map(l=>fmtFecha(l.fecha)+': '+esc(l.observacion)).join(' · ');
+        const pre=(!enSem.length && logs.length)?'últ. ':'';
+        body+=`<li>${esc(p.nombre)} <span class="rmut">— ${p.tipo}, avance ${p.avance_pct}%${obs?'. '+pre+obs:''}</span></li>`;
+      });
+      body+=`</ul>`;
     });
   }
   // Auditorías técnicas del mes (por vendedor)
