@@ -1076,18 +1076,29 @@ function buildReportSemanal(){
   const una = weeks.length===1;
   let body=`<div class="rhead"><div class="rbrand">Recouromex · Gestión Comercial</div><h1>Reporte semanal de visitas</h1>
     <div class="rsub">${una?('Semana del '+fmtFecha(weeks[0].lun)+' al '+fmtFecha(weeks[0].dom)):(ymLabel(PERIODO)+' · desglose por semana')} · generado ${fmtFecha(hoyStr())}</div></div>`;
-  // Plan vs realizado (lo que planificó hacer vs lo que hizo), por vendedor
+  // Plan vs realizado: verifica que lo ejecutado coincida con lo planeado (mismo cliente y tipo)
   const lunSet=new Set(weeks.map(w=>w.lun));
   body+=`<h2>Plan vs realizado ${una?'(semana)':'('+ymLabel(PERIODO)+')'}</h2>`;
-  body+=`<table class="rmini"><thead><tr><th style="text-align:left">Vendedor</th><th>Planeadas</th><th>Realizadas</th><th>Cumplimiento</th></tr></thead><tbody>`;
+  body+=`<table class="rmini"><thead><tr><th style="text-align:left">Vendedor</th><th>Planeadas</th><th>Cumplidas</th><th>Pendientes</th><th>Extras</th><th>Cumplimiento</th></tr></thead><tbody>`;
+  const detPV=[];
   vendedores().forEach(v=>{
-    const planeadas=STATE.planSemanal.filter(p=>p.vendedor_id===v.id && lunSet.has(String(p.semana_inicio).slice(0,10))).length;
-    const realizadas=weeks.reduce((acc,w)=>acc+STATE.visitas.filter(x=>x.vendedor_id===v.id && x.realizada && x.fecha>=w.lun && x.fecha<=w.dom).length,0);
-    const pct=planeadas?Math.round(realizadas/planeadas*100):0;
-    const col=!planeadas?'#6b6457':pct>=90?'#2e7d4f':pct>=70?'#c9952b':'#b53a2e';
-    body+=`<tr><td>${esc(v.nombre)}</td><td class="rnum">${planeadas}</td><td class="rnum">${realizadas}</td><td class="rnum" style="color:${col}"><b>${planeadas?pct+'%':'—'}</b></td></tr>`;
+    const plan=STATE.planSemanal.filter(p=>p.vendedor_id===v.id && lunSet.has(String(p.semana_inicio).slice(0,10)));
+    const vis=weeks.reduce((acc,w)=>acc.concat(STATE.visitas.filter(x=>x.vendedor_id===v.id && x.realizada && x.fecha>=w.lun && x.fecha<=w.dom)),[]);
+    const pool=vis.slice(); let cumplidas=0; const pend=[];
+    plan.forEach(p=>{ const i=pool.findIndex(x=>x.cliente_id===p.cliente_id && x.tipo_visita_id===p.tipo_visita_id); if(i>=0){ cumplidas++; pool.splice(i,1); } else pend.push(p); });
+    const P=plan.length, pct=P?Math.round(cumplidas/P*100):0;
+    const col=!P?'#6b6457':pct>=90?'#2e7d4f':pct>=70?'#c9952b':'#b53a2e';
+    body+=`<tr><td>${esc(v.nombre)}</td><td class="rnum">${P}</td><td class="rnum">${cumplidas}</td><td class="rnum">${pend.length}</td><td class="rnum">${pool.length}</td><td class="rnum" style="color:${col}"><b>${P?pct+'%':'—'}</b></td></tr>`;
+    if(P && (pend.length || pool.length)) detPV.push({v, pend, extras:pool});
   });
   body+=`</tbody></table>`;
+  body+=`<p class="rcat" style="color:#6b6457">Cumplidas = planeadas que sí se hicieron (mismo cliente y tipo). Pendientes = planeadas no hechas. Extras = visitas fuera del plan. Cumplimiento = cumplidas ÷ planeadas.</p>`;
+  detPV.forEach(d=>{
+    body+=`<div class="rlab">${esc(d.v.nombre)}</div><ul>`;
+    if(d.pend.length) body+=`<li><b>Pendientes:</b> ${d.pend.map(p=>{const c=clienteById(p.cliente_id),t=tipoById(p.tipo_visita_id); return esc(c?c.nombre_comercial:'—')+(t?' ('+esc(t.letra)+')':'');}).join(', ')}</li>`;
+    if(d.extras.length){ const ex={}; d.extras.forEach(x=>{const c=clienteById(x.cliente_id); const nm=c?c.nombre_comercial:'#'+x.cliente_id; ex[nm]=(ex[nm]||0)+1;}); body+=`<li><b>Extras:</b> ${Object.keys(ex).map(k=>esc(k)+(ex[k]>1?' ×'+ex[k]:'')).join(', ')}</li>`; }
+    body+=`</ul>`;
+  });
   let gran=0; const catGtot={};
   weeks.forEach(w=>{
     if(!una) body+=`<div class="rlab" style="margin-top:14px;font-size:12px;border-bottom:1px solid #d9d3c6;padding-bottom:3px">Semana ${w.n} · ${fmtFecha(w.lun)} al ${fmtFecha(w.dom)}</div>`;
