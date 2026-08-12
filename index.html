@@ -859,11 +859,18 @@ function viewAuditorias(){
   const ym=PERIODO, mes=primerDia(ym);
   const soloMios=esVendedor();
   const puedeEditar=puedeCoord();
+  const sems=semanasDelPeriodo();
+  const wsel=viewAuditorias._week||'';
   let lista=STATE.planAud.filter(a=>String(a.mes).slice(0,10)===mes);
   if(soloMios) lista=lista.filter(a=>a.vendedor_id===SESSION.id);
-  let h=`<div class="card"><div class="chead"><div class="t"><small>Inicio de mes · ${ymLabel(ym)}</small>Plan de auditorías técnicas</div>
-    ${puedeEditar?`<button class="act gold sm" data-act="nuevaAud">+ Auditoría</button>`:''}</div><div class="cbody">`;
-  if(!lista.length) h+=`<div class="empty">Sin auditorías planeadas para este mes.${puedeEditar?' Lánzalas con "+ Auditoría".':''}</div>`;
+  if(wsel){ const dom=addDays(wsel,6); lista=lista.filter(a=>{ const f=a.fecha_propuesta||a.fecha_realizada; return f && String(f).slice(0,10)>=wsel && String(f).slice(0,10)<=dom; }); }
+  let h=`<div class="card"><div class="chead"><div class="t"><small>${wsel?'Semana '+fmtDM(wsel)+'–'+fmtDM(addDays(wsel,6)):'Inicio de mes'} · ${ymLabel(ym)}</small>Plan de auditorías técnicas</div>
+    ${puedeEditar?`<button class="act gold sm" data-act="nuevaAud">+ Auditoría</button>`:''}</div>
+    <div class="cpad filtbar">Semana:
+      <select id="audWeek"><option value="">Todo el mes</option>${sems.map(w=>`<option value="${w.lun}" ${w.lun===wsel?'selected':''}>Semana ${w.n} · ${fmtDM(w.lun)}–${fmtDM(w.dom)}</option>`).join('')}</select>
+      <span style="margin-left:auto;color:var(--muted)">${lista.length} auditoría(s)</span></div>
+    <div class="cbody">`;
+  if(!lista.length) h+=`<div class="empty">Sin auditorías${wsel?' en esta semana (por su fecha propuesta)':' planeadas para este mes'}.${puedeEditar?' Lánzalas con "+ Auditoría".':''}</div>`;
   else{
     const vs=[...new Set(lista.map(a=>a.vendedor_id))];
     vs.forEach(vid=>{
@@ -883,6 +890,7 @@ function viewAuditorias(){
   h+=`</div></div>`;
   return h;
 }
+viewAuditorias._after=function(){ const s=document.getElementById('audWeek'); if(s) s.addEventListener('change',e=>{ viewAuditorias._week=e.target.value; render(); }); };
 
 /* ---- INACTIVOS / REACTIVACION (campaña mensual) ---- */
 function viewReactivacion(){
