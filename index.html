@@ -527,7 +527,7 @@ function viewClientes(){
   if(!lista.length) h+=`<tr><td colspan="8"><div class="empty" style="padding:8px 0">Sin resultados.</div></td></tr>`;
   else h+=lista.map(c=>`<tr>
       <td>${esc(c.codigo||'')}</td>
-      <td><span class="nm">${esc(c.nombre_comercial)}</span></td>
+      <td><span class="nm">${esc(c.nombre_comercial)}</span>${c.clasificacion?` <span class="badge marca">${esc(c.clasificacion)}</span>`:''}</td>
       <td style="color:var(--muted)">${esc(c.razon_social||'')}</td>
       <td>${esc(usuarioNombre(c.vendedor_id))}</td>
       <td><span class="badge est-${c.estatus}">${c.estatus}</span></td>
@@ -1480,6 +1480,7 @@ function clienteModal(c){
     <div class="fld"><label>Nombre comercial</label><input type="text" id="cNom" value="${c?esc(c.nombre_comercial):''}"></div>
     <div class="fld"><label>Razón social</label><input type="text" id="cRaz" value="${c?esc(c.razon_social||''):''}"></div>
     ${fldSelect('cVend','Vendedor',vendedores().map(v=>[v.id,v.nombre]),c?c.vendedor_id:'')}
+    ${fldSelect('cClasif','Clasificación',[['','— sin clasificar —'],['RC','Recouromex (RC)'],['LC','Leather Care (LC)']],c?(c.clasificacion||''):'')}
     <div class="fld"><label>Requisitos del cliente</label>
       <div class="fld chkline"><input type="checkbox" id="cFicha" ${c&&c.ficha_tecnica?'checked':''}><label>Ficha técnica</label></div>
       <div class="fld chkline"><input type="checkbox" id="cPol" ${c&&c.politica_firmada?'checked':''}><label>Política firmada</label></div>
@@ -1497,6 +1498,7 @@ function clienteModal(c){
     }
     save('gvis_clientes',{ id:c?c.id:undefined, codigo:val('cCod')||null, nombre_comercial:nom,
       razon_social:val('cRaz')||null, vendedor_id:nuevoVend, estatus:nuevoEst, nota:val('cNota')||null,
+      clasificacion:val('cClasif')||null,
       ficha_tecnica:chk('cFicha'), politica_firmada:chk('cPol'), correo:chk('cCorreo') });
   });
 }
