@@ -565,7 +565,7 @@ function viewProspectos(){
         const logs=STATE.prospLog.filter(l=>l.prospecto_id===p.id).sort((a,b)=>String(b.fecha).localeCompare(String(a.fecha)));
         const ult=logs[0];
         return `<div class="trow"><div class="body">
-          <div class="ti">${esc(p.nombre)} ${p.contacto?`<span style="font-family:Arial;font-size:12px;color:var(--muted)">· ${esc(p.contacto)}</span>`:''}</div>
+          <div class="ti">${esc(p.nombre)} ${p.contacto?`<span style="font-family:Arial;font-size:12px;color:var(--muted)">· ${esc(p.contacto)}</span>`:''}${p.origen?` <span class="chipmini">${esc(p.origen)}</span>`:''}</div>
           <div class="meta">${esc(usuarioNombre(p.vendedor_id))} · Avance ${p.avance_pct}%${ult?` · Últ: ${fmtFecha(ult.fecha)} ${esc(ult.observacion)}`:''}</div>
         </div>
         <div class="rowbtns">
@@ -1504,17 +1504,25 @@ function clienteModal(c){
 }
 
 function prospModal(p){
+  const origKnown=['Instagram','Facebook','Página web','WhatsApp','Recomendación','Llamada directa'];
+  const selOrig = p?(p.origen ? (origKnown.includes(p.origen)?p.origen:'Otro') : '') : '';
+  const otroOrig = (p && p.origen && !origKnown.includes(p.origen)) ? p.origen : '';
   openModal(`<h3>${p?'Editar':'Nuevo'} prospecto</h3>
     ${fldSelect('prTipo','Tipo',[['prospecto','Prospecto'],['inactivo','Inactivo'],['seguimiento','Seguimiento'],['nuevo','Nuevo']],p?p.tipo:'prospecto')}
     <div class="fld"><label>Nombre</label><input type="text" id="prNom" value="${p?esc(p.nombre):''}"></div>
     <div class="fld"><label>Contacto</label><input type="text" id="prCont" value="${p?esc(p.contacto||''):''}"></div>
+    ${fldSelect('prOrigen','Origen del prospecto',[['','— sin especificar —'],['Instagram','Instagram'],['Facebook','Facebook'],['Página web','Página web'],['WhatsApp','WhatsApp'],['Recomendación','Recomendación'],['Llamada directa','Llamada directa'],['Otro','Otro (describir)']],selOrig)}
+    <div class="fld" id="prOtroWrap" style="display:${selOrig==='Otro'?'block':'none'}"><label>Describe el origen</label><input type="text" id="prOtro" value="${esc(otroOrig)}"></div>
     ${fldSelect('prVend','Vendedor',vendedores().map(v=>[v.id,v.nombre]),p?p.vendedor_id:SESSION.id)}
     <div class="fld"><label>Avance %</label><input type="number" id="prAv" min="0" max="100" value="${p?p.avance_pct:0}"></div>
     <div class="mbtns">${p?`<button class="act danger" id="prDel">Archivar</button>`:''}<button class="act ghost" onclick="closeModal()">Cancelar</button><button class="act gold" id="prSave">Guardar</button></div>`);
+  document.getElementById('prOrigen').addEventListener('change',e=>{ document.getElementById('prOtroWrap').style.display=e.target.value==='Otro'?'block':'none'; });
   document.getElementById('prSave').addEventListener('click',()=>{
     const nom=val('prNom'); if(!nom){ toast('Falta nombre.','err'); return; }
+    const origSel=val('prOrigen');
+    const origen = origSel==='Otro' ? (val('prOtro')||'Otro') : (origSel||null);
     save('gvis_prospectos',{ id:p?p.id:undefined, tipo:val('prTipo'), nombre:nom, contacto:val('prCont')||null,
-      vendedor_id:val('prVend'), avance_pct:Number(val('prAv'))||0 });
+      origen, vendedor_id:val('prVend'), avance_pct:Number(val('prAv'))||0 });
   });
   if(p){ const db2=document.getElementById('prDel'); db2&&db2.addEventListener('click',()=>save('gvis_prospectos',{id:p.id,activo:false})); }
 }
