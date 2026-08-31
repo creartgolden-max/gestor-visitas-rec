@@ -1111,7 +1111,7 @@ function buildReportSemanal(){
   const rangeIni=weeks[0].lun, rangeFin=weeks[weeks.length-1].dom;
   const conPros=vendedores().filter(v=>STATE.prospectos.some(p=>p.activo && p.vendedor_id===v.id));
   if(conPros.length){
-    body+=`<h2 style="margin-top:16px">Seguimiento a prospectos</h2>`;
+    body+=`<h2 style="margin-top:16px">Seguimiento a prospectos, inactivos y otros</h2>`;
     conPros.forEach(v=>{
       const pros=STATE.prospectos.filter(p=>p.activo && p.vendedor_id===v.id);
       body+=`<div class="rlab">${esc(v.nombre)}</div><ul>`;
