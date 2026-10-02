@@ -643,7 +643,7 @@ function viewTablero(){
 function viewCompras(){
   const ym=PERIODO, mes=primerDia(ym);
   const fVend=viewCompras._vend||'';
-  let lista=STATE.clientes.filter(c=>c.estatus!=='inactivo');
+  let lista=STATE.clientes.filter(c=>c.estatus==='activo');
   if(fVend) lista=lista.filter(c=>c.vendedor_id===fVend);
   const mapa={}; STATE.compras.filter(c=>String(c.mes).slice(0,10)===mes).forEach(c=>mapa[c.cliente_id]=c);
 
@@ -1006,6 +1006,16 @@ function viewReportes(){
           <p style="font-family:Arial;font-size:12.5px;color:var(--muted)">Clientes que compraron y su monto, por vendedor, con la compra total del mes.</p>
           <button class="act gold" data-act="repCompras" style="margin-top:10px">Generar PDF compras</button>
         </div></div>
+        <div class="card" style="margin:0"><div class="cpad">
+          <div class="sechead" style="padding:0 0 6px">Comportamiento trimestral · ${trimestreDe(ym)}</div>
+          <p style="font-family:Arial;font-size:12.5px;color:var(--muted)">Clientes que NO compraron en el trimestre, por vendedor. Casilla amarilla = no compró ese mes; roja = no compró en los tres.</p>
+          <button class="act gold" data-act="repNoCompraron" style="margin-top:10px">Generar PDF trimestral</button>
+        </div></div>
+        <div class="card" style="margin:0"><div class="cpad">
+          <div class="sechead" style="padding:0 0 6px">Volumen de ventas · ${trimestreDe(ym)}</div>
+          <p style="font-family:Arial;font-size:12.5px;color:var(--muted)">Cuánto compró cada cliente por mes y el total del trimestre, agrupado en 3 niveles (>${money(cfgNum('umbral_reasignacion',3000))}, >${money(cfgNum('umbral_mostrador',1000))}, menos), por vendedor.</p>
+          <button class="act gold" data-act="repVolumen" style="margin-top:10px">Generar PDF volumen</button>
+        </div></div>
       </div>
     </div></div>`;
 }
@@ -1233,6 +1243,65 @@ function buildReportCompras(){
   return body;
 }
 
+/* ---- helpers de compras por mes (para reportes trimestrales) ---- */
+function compraRec(cid,mes){ return STATE.compras.find(c=>c.cliente_id===cid && String(c.mes).slice(0,10)===mes); }
+function compro(cid,mes){ const r=compraRec(cid,mes); return !!(r && (r.compro || Number(r.monto)>0)); }
+function montoMes(cid,mes){ const r=compraRec(cid,mes); return r?Number(r.monto||0):0; }
+function mesCorto(m){ return MES[parseInt(String(m).slice(5,7),10)-1]; }
+
+/* ---- REPORTE: comportamiento trimestral (clientes que NO compraron) FO-VTAS-12 ---- */
+function buildReportNoCompraron(){
+  const trim=trimestreDe(PERIODO), meses=mesesTrimestre(trim);
+  const lbl=meses.map(mesCorto);
+  let body=`<div class="rhead"><div class="rbrand">Recouromex · Leather Care</div><h1>Comportamiento de clientes trimestral</h1>
+    <div class="rsub">${trim} · ${lbl.join(' / ')} · generado ${fmtFecha(hoyStr())}</div></div>`;
+  body+=`<p class="rcat"><span style="display:inline-block;width:26px;background:#fff3b0;border:1px solid #d9d3c6">&nbsp;</span> No compró en el mes &nbsp;·&nbsp; <span style="display:inline-block;width:26px;background:#f3b0b0;border:1px solid #d9d3c6">&nbsp;</span> No compró en los tres meses</p>`;
+  vendedores().forEach((v,vi)=>{
+    const cls=STATE.clientes.filter(c=>c.vendedor_id===v.id && c.estatus==='activo').slice().sort((a,b)=>a.nombre_comercial.localeCompare(b.nombre_comercial));
+    if(!cls.length) return;
+    body+=`<h2${vi>0?' style="page-break-before:always"':''}>${esc(v.nombre)} <span class="rtot">${cls.length} clientes</span></h2>`;
+    body+=`<table class="rmini"><thead><tr><th>No.</th><th>Cód.</th><th style="text-align:left">Nombre comercial</th><th style="text-align:left">Razón social</th>${lbl.map(m=>`<th>${m}</th>`).join('')}</tr></thead><tbody>`;
+    cls.forEach((c,i)=>{
+      const flags=meses.map(m=>compro(c.id,m));
+      const ninguno=flags.every(f=>!f);
+      body+=`<tr><td class="rnum">${i+1}</td><td class="rnum"${ninguno?' style="background:#f3b0b0"':''}>${esc(c.codigo||'')}</td><td${ninguno?' style="background:#f3b0b0"':''}>${esc(c.nombre_comercial)}</td><td style="color:#6b6457">${esc(c.razon_social||'')}</td>${flags.map(f=>`<td class="rnum"${f?'':' style="background:#fff3b0"'}>${f?'✓':''}</td>`).join('')}</tr>`;
+    });
+    body+=`</tbody></table>`;
+  });
+  return body;
+}
+
+/* ---- REPORTE: volumen de ventas por cliente (3 bandas) FO-VTAS-13 ---- */
+function buildReportVolumen(){
+  const trim=trimestreDe(PERIODO), meses=mesesTrimestre(trim);
+  const lbl=meses.map(mesCorto);
+  const u3=cfgNum('umbral_reasignacion',3000), u1=cfgNum('umbral_mostrador',1000);
+  let body=`<div class="rhead"><div class="rbrand">Recouromex · Leather Care</div><h1>Volumen de ventas por cliente</h1>
+    <div class="rsub">${trim} · ${lbl.join(' - ')} · generado ${fmtFecha(hoyStr())}</div></div>`;
+  vendedores().forEach((v,vi)=>{
+    const cls=STATE.clientes.filter(c=>c.vendedor_id===v.id && c.estatus!=='inactivo');
+    const rows=cls.map(c=>{ const mm=meses.map(m=>montoMes(c.id,m)); return {c, mm, tot:mm.reduce((a,b)=>a+b,0)}; }).filter(r=>r.tot>0);
+    if(!rows.length) return;
+    const bandas=[
+      {lbl:'Compran más de '+money(u3), test:r=>r.tot>=u3},
+      {lbl:'Compran entre '+money(u1)+' y '+money(u3), test:r=>r.tot>=u1 && r.tot<u3},
+      {lbl:'Compran menos de '+money(u1), test:r=>r.tot<u1}
+    ];
+    body+=`<h2${vi>0?' style="page-break-before:always"':''}>${esc(v.nombre)}</h2>`;
+    let granV=0;
+    bandas.forEach(b=>{
+      const g=rows.filter(b.test).sort((a,x)=>x.tot-a.tot);
+      if(!g.length) return;
+      body+=`<div class="rlab">${b.lbl} · ${g.length} cliente(s)</div>`;
+      body+=`<table class="rmini"><thead><tr><th style="text-align:left">Cliente</th>${lbl.map(m=>`<th>${m}</th>`).join('')}<th>Total</th></tr></thead><tbody>`;
+      g.forEach(r=>{ granV+=r.tot; body+=`<tr><td>${esc(r.c.nombre_comercial)}</td>${r.mm.map(x=>`<td class="rnum">${x?money(x):''}</td>`).join('')}<td class="rnum"><b>${money(r.tot)}</b></td></tr>`; });
+      body+=`</tbody></table>`;
+    });
+    body+=`<div class="rgrand" style="margin-top:8px">Total ${esc(v.nombre)}: <b>${money(granV)}</b></div>`;
+  });
+  return body;
+}
+
 /* =====================================================================
    MODAL genérico
    ===================================================================== */
@@ -1364,7 +1433,9 @@ const ACTIONS={
   repSemanal(){ openPrint('Reporte semanal · Recouromex', buildReportSemanal()); },
   repMensual(){ openPrint('Reporte mensual · Recouromex', buildReportMensual()); },
   repEstrella(){ openPrint('Reporte productos estrella · Recouromex', buildReportEstrella()); },
-  repCompras(){ openPrint('Reporte de compras · Recouromex', buildReportCompras()); }
+  repCompras(){ openPrint('Reporte de compras · Recouromex', buildReportCompras()); },
+  repNoCompraron(){ openPrint('Comportamiento trimestral · Recouromex', buildReportNoCompraron()); },
+  repVolumen(){ openPrint('Volumen de ventas por cliente · Recouromex', buildReportVolumen()); }
 };
 
 async function userUpsert(args){
