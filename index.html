@@ -243,6 +243,8 @@ function addDays(dstr,n){ const d=new Date(dstr+'T00:00:00'); d.setDate(d.getDat
 function fmtDM(dstr){ const p=dstr.split('-'); return p[2]+'/'+p[1]; }
 function trimestreDe(ym){ const [y,m]=ym.split('-').map(Number); return y+'-Q'+(Math.floor((m-1)/3)+1); }
 function mesesTrimestre(trim){ const [y,q]=trim.split('-Q'); const base=(q-1)*3; return [0,1,2].map(i=>y+'-'+String(base+1+i).padStart(2,'0')+'-01'); }
+function trimLabel(trim){ const p=trim.split('-Q'); const base=(Number(p[1])-1)*3; return MES[base].slice(0,3)+'–'+MES[base+2].slice(0,3)+' '+p[0]; }
+function trimestresRecientes(){ const d=new Date(); let y=d.getFullYear(), q=Math.floor(d.getMonth()/3)+1; const arr=[]; for(let i=0;i<8;i++){ arr.push(y+'-Q'+q); q--; if(q<1){ q=4; y--; } } return arr; }
 
 /* ---------------- helpers varios ---------------- */
 function esc(s){ return (s==null?'':String(s)).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
@@ -980,7 +982,9 @@ function viewReportes(){
   const anyCur=curLun && wk.some(w=>w.lun===curLun);
   return `<div class="card"><div class="chead"><div class="t"><small>Impresión / PDF</small>Reportes para junta</div></div>
     <div class="cpad">
-      <p style="font-family:Arial;font-size:13px;color:var(--muted);margin-bottom:14px">Genera el reporte y en el diálogo de impresión elige <b>"Guardar como PDF"</b> (o imprime directo).<br><b>Para un mes pasado</b> (ej. Julio) cambia el selector <b>"Periodo"</b> de arriba antes de generar — todos los reportes lo respetan. Tu historial se conserva completo, no se borra.</p>
+      <p style="font-family:Arial;font-size:13px;color:var(--muted);margin-bottom:10px">Genera el reporte y en el diálogo de impresión elige <b>"Guardar como PDF"</b> (o imprime directo).<br><b>Para un mes pasado</b> (ej. Julio) cambia el selector <b>"Periodo"</b> de arriba antes de generar.</p>
+      <div class="filtbar" style="margin-bottom:14px"><b style="font-family:Georgia;color:var(--green)">Trimestre</b> (para los reportes trimestrales):
+        <select id="repTrim">${trimestresRecientes().map(t=>`<option value="${t}" ${t===trimestreDe(ymActual())?'selected':''}>${trimLabel(t)}</option>`).join('')}</select></div>
       <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:14px">
         <div class="card" style="margin:0"><div class="cpad">
           <div class="sechead" style="padding:0 0 6px">Reporte semanal</div>
@@ -1007,13 +1011,13 @@ function viewReportes(){
           <button class="act gold" data-act="repCompras" style="margin-top:10px">Generar PDF compras</button>
         </div></div>
         <div class="card" style="margin:0"><div class="cpad">
-          <div class="sechead" style="padding:0 0 6px">Comportamiento trimestral · ${trimestreDe(ym)}</div>
-          <p style="font-family:Arial;font-size:12.5px;color:var(--muted)">Clientes que NO compraron en el trimestre, por vendedor. Casilla amarilla = no compró ese mes; roja = no compró en los tres.</p>
+          <div class="sechead" style="padding:0 0 6px">Comportamiento trimestral</div>
+          <p style="font-family:Arial;font-size:12.5px;color:var(--muted)">Clientes que NO compraron en el <b>trimestre elegido arriba</b>, por vendedor. Casilla amarilla = no compró ese mes; roja = no compró en los tres.</p>
           <button class="act gold" data-act="repNoCompraron" style="margin-top:10px">Generar PDF trimestral</button>
         </div></div>
         <div class="card" style="margin:0"><div class="cpad">
-          <div class="sechead" style="padding:0 0 6px">Volumen de ventas · ${trimestreDe(ym)}</div>
-          <p style="font-family:Arial;font-size:12.5px;color:var(--muted)">Cuánto compró cada cliente por mes y el total del trimestre, agrupado en 3 niveles (>${money(cfgNum('umbral_reasignacion',3000))}, >${money(cfgNum('umbral_mostrador',1000))}, menos), por vendedor.</p>
+          <div class="sechead" style="padding:0 0 6px">Volumen de ventas</div>
+          <p style="font-family:Arial;font-size:12.5px;color:var(--muted)">Cuánto compró cada cliente por mes y el total del <b>trimestre elegido arriba</b>, agrupado en 3 niveles (>${money(cfgNum('umbral_reasignacion',3000))}, >${money(cfgNum('umbral_mostrador',1000))}, menos), por vendedor.</p>
           <button class="act gold" data-act="repVolumen" style="margin-top:10px">Generar PDF volumen</button>
         </div></div>
       </div>
@@ -1251,7 +1255,7 @@ function mesCorto(m){ return MES[parseInt(String(m).slice(5,7),10)-1]; }
 
 /* ---- REPORTE: comportamiento trimestral (clientes que NO compraron) FO-VTAS-12 ---- */
 function buildReportNoCompraron(){
-  const trim=trimestreDe(PERIODO), meses=mesesTrimestre(trim);
+  const _tEl=document.getElementById('repTrim'); const trim=_tEl?_tEl.value:trimestreDe(PERIODO), meses=mesesTrimestre(trim);
   const lbl=meses.map(mesCorto);
   let body=`<div class="rhead"><div class="rbrand">Recouromex · Leather Care</div><h1>Comportamiento de clientes trimestral</h1>
     <div class="rsub">${trim} · ${lbl.join(' / ')} · generado ${fmtFecha(hoyStr())}</div></div>`;
@@ -1273,7 +1277,7 @@ function buildReportNoCompraron(){
 
 /* ---- REPORTE: volumen de ventas por cliente (3 bandas) FO-VTAS-13 ---- */
 function buildReportVolumen(){
-  const trim=trimestreDe(PERIODO), meses=mesesTrimestre(trim);
+  const _tEl=document.getElementById('repTrim'); const trim=_tEl?_tEl.value:trimestreDe(PERIODO), meses=mesesTrimestre(trim);
   const lbl=meses.map(mesCorto);
   const u3=cfgNum('umbral_reasignacion',3000), u1=cfgNum('umbral_mostrador',1000);
   let body=`<div class="rhead"><div class="rbrand">Recouromex · Leather Care</div><h1>Volumen de ventas por cliente</h1>
