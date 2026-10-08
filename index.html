@@ -221,7 +221,8 @@ const STATE={
   prospectos:[], prospLog:[], grupos:[], gruposDet:[],
   compras:[], cortes:[],
   cotiz:[], planAud:[], react:[], objetivos:[], cortesR:[],
-  estrellas:[], estrellasCli:[]
+  estrellas:[], estrellasCli:[],
+  gprProyectos:[], gprUsuarios:[]   // módulo Gestor de Proyectos (solo lectura, para pantalla de proyectos del coordinador)
 };
 let PERIODO=null;         // 'YYYY-MM'
 let currentView=null;
@@ -316,6 +317,15 @@ async function loadData(){
     STATE.estrellas    = est.error?[]:(est.data||[]);
     STATE.estrellasCli = estc.error?[]:(estc.data||[]);
   }catch(e){ STATE.estrellas=[]; STATE.estrellasCli=[]; }
+
+  // Gestor de Proyectos (otro módulo, mismo Supabase): carga tolerante y solo-lectura.
+  // Alimenta la pestaña "Mis Proyectos" del coordinador con sus proyectos e hitos donde participa.
+  try{
+    const gpr = await db.from('gpr2_proyectos').select('id,nombre,owner_id,status,inicio,termino,integrantes,hitos,proceso_id');
+    const gpu = await db.from('gpr2_usuarios_publico').select('id,nombre,rol');
+    STATE.gprProyectos = gpr.error?[]:(gpr.data||[]);
+    STATE.gprUsuarios  = gpu.error?[]:(gpu.data||[]);
+  }catch(e){ STATE.gprProyectos=[]; STATE.gprUsuarios=[]; }
 }
 async function reload(){ await loadData(); render(); }
 
@@ -324,7 +334,7 @@ async function reload(){ await loadData(); render(); }
    ===================================================================== */
 function tabsFor(rol){
   if(rol==='vendedor')    return [['visitas','Mi Día'],['plan','Mi Plan'],['auditorias','Auditorías'],['estrella','Estrella'],['reactivacion','Inactivos'],['clientes','Mi Cartera'],['prospectos','Prospectos'],['buscados','Más Buscados']];
-  if(rol==='coordinador') return [['visitas','Mi Día'],['tablero','Tablero'],['plan','Plan'],['auditorias','Auditorías'],['estrella','Estrella'],['reactivacion','Inactivos'],['clientes','Clientes'],['cotizaciones','Cotizaciones'],['prospectos','Prospectos'],['buscados','Más Buscados'],['cortes','Cortes']];
+  if(rol==='coordinador') return [['visitas','Mi Día'],['misproyectos','Mis Proyectos'],['tablero','Tablero'],['plan','Plan'],['auditorias','Auditorías'],['estrella','Estrella'],['reactivacion','Inactivos'],['clientes','Clientes'],['cotizaciones','Cotizaciones'],['prospectos','Prospectos'],['buscados','Más Buscados'],['cortes','Cortes']];
   if(rol==='admin')       return [['consolidado','Consolidado'],['cotizaciones','Cotizaciones'],['compras','Compras'],['reactivacion','Inactivos'],['clientes','Clientes'],['estrella','Estrella'],['catalogos','Catálogos'],['config','Umbrales'],['usuarios','Usuarios'],['reportes','Reportes']];
   return [['consolidado','Consolidado'],['cotizaciones','Cotizaciones'],['objetivos','Objetivos'],['estrella','Estrella'],['clientes','Clientes'],['cortes','Cortes'],['buscados','Más Buscados'],['reportes','Reportes']]; // direccion
 }
@@ -344,7 +354,7 @@ function render(){
             buscados:viewBuscados,tablero:viewTablero,cortes:viewCortes,compras:viewCompras,
             catalogos:viewCatalogos,config:viewConfig,usuarios:viewUsuarios,consolidado:viewConsolidado,
             cotizaciones:viewCotizaciones,auditorias:viewAuditorias,reactivacion:viewReactivacion,objetivos:viewObjetivos,
-            estrella:viewEstrellas,reportes:viewReportes}[currentView];
+            estrella:viewEstrellas,reportes:viewReportes,misproyectos:viewMisProyectos}[currentView];
   v.innerHTML = fn ? fn() : '<div class="empty">Vista no disponible.</div>';
   if(fn && fn._after) fn._after();
   bindActions();
@@ -356,6 +366,83 @@ function bindActions(){
     if(el._bound) return; el._bound=true;
     el.addEventListener('click',()=>ACTIONS[el.dataset.act] && ACTIONS[el.dataset.act](el.dataset));
   });
+}
+
+/* =====================================================================
+   VISTA: MIS PROYECTOS (coordinador) — lectura del Gestor de Proyectos
+   Muestra proyectos donde es responsable (dueño o integrante) e hitos
+   donde participa (es el "quién"). Solo lectura: marcar se hace en el
+   Gestor de Proyectos (el coordinador no es usuario de ese módulo).
+   ===================================================================== */
+function gprNorm(s){ return String(s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').trim(); }
+function gprCoincide(texto,nombre){ const t=gprNorm(texto); if(!t) return false; const pn=gprNorm(nombre).split(/\s+/)[0]; if(!pn) return false; return (' '+t+' ').indexOf(' '+pn+' ')>=0; }
+function gprUserNombre(id){ const u=(STATE.gprUsuarios||[]).find(x=>x.id===id); return u?u.nombre:('#'+id); }
+function gprIntegrantes(p){ const arr=Array.isArray(p.integrantes)?p.integrantes:[]; return arr.map(m=>({nombre:String((m&&(m.nombre||m.integrante))||'').trim(), resp:String((m&&m.responsabilidad)||'').trim()})).filter(x=>x.nombre); }
+function gprSoyIntegrante(p,nombre){ return gprIntegrantes(p).some(m=>gprCoincide(m.nombre,nombre)); }
+function gprAvance(p){ const hs=(Array.isArray(p.hitos)?p.hitos:[]).filter(h=>h&&!h.cancelado); const t=hs.length,h=hs.filter(x=>x.hecho).length; return {total:t,hechos:h,p:t===0?null:Math.round(h/t*100)}; }
+function gprColorPct(pct){ return pct==null?'var(--line)':(pct>=80?'var(--ok)':pct>=50?'var(--warn)':'var(--bad)'); }
+function gprHitoRow(p,ht,resaltar){
+  const cancel=!!ht.cancelado;
+  const atras= ht.fecha && ht.fecha<hoyStr() && !ht.hecho && !cancel;
+  const estado = cancel?'<span style="font-family:Arial;font-size:11px;color:var(--bad)">✕ cancelado</span>'
+    : ht.hecho?'<span style="font-family:Arial;font-size:11px;color:var(--ok)">✓ hecho</span>'
+    : atras?'<span style="font-family:Arial;font-size:11px;font-weight:700;color:var(--bad)">⚠ atrasado</span>'
+    : '<span style="font-family:Arial;font-size:11px;color:var(--accent-deep)">pendiente</span>';
+  const mark = cancel?'✕':(ht.hecho?'✓':'·');
+  const esMio = resaltar && ht.quien && gprCoincide(ht.quien,SESSION.nombre);
+  const quien = ht.quien?('<span style="font-family:Arial;font-size:11px;color:'+(esMio?'var(--green)':'var(--muted)')+(esMio?';font-weight:700':'')+'">👤 '+esc(ht.quien)+'</span>'):'';
+  const fecha = ht.fecha?('<span style="font-family:Arial;font-size:11px;color:'+(atras?'var(--bad)':'var(--muted)')+'">📅 '+fmtFecha(ht.fecha)+'</span>'):'';
+  return '<div style="display:flex;align-items:center;gap:8px;padding:4px 0;flex-wrap:wrap;border-top:1px dashed var(--line)">'+
+    '<span style="width:16px;text-align:center;color:'+(cancel?'var(--bad)':(ht.hecho?'var(--ok)':'var(--muted)'))+'">'+mark+'</span>'+
+    '<span style="flex:1;min-width:140px;font-family:Arial;font-size:13px'+((ht.hecho||cancel)?';text-decoration:line-through;color:var(--muted)':'')+'">'+esc(ht.texto||'')+'</span>'+
+    fecha+quien+estado+'</div>';
+}
+function gprProyectoCard(p,miRol){
+  const a=gprAvance(p); const bc=gprColorPct(a.p);
+  const cod='PR-'+String(p.id).padStart(2,'0');
+  const eq=gprIntegrantes(p);
+  let h='<div style="border:1px solid var(--line);border-radius:10px;padding:12px 14px;margin-bottom:12px;background:#fff">';
+  h+='<div style="font-family:Georgia;font-size:15px;color:var(--green);font-weight:700">'+
+     '<span style="font-family:Arial;font-size:11px;font-weight:700;background:var(--accent);color:#fff;padding:1px 8px;border-radius:6px;margin-right:7px;vertical-align:middle">'+cod+'</span>'+esc(p.nombre)+
+     ' <span style="font-family:Arial;font-size:11px;font-weight:700;color:#fff;background:'+(miRol==='Dueño'?'var(--green)':'var(--accent-deep)')+';padding:1px 8px;border-radius:10px;vertical-align:middle">'+miRol+'</span></div>';
+  h+='<div style="font-family:Arial;font-size:12px;color:var(--muted);margin-top:4px">Dueño: <b style="color:var(--ink)">'+esc(gprUserNombre(p.owner_id))+'</b> · '+esc(p.status||'—')+
+     (p.termino?(' · Término: <b>'+fmtFecha(p.termino)+'</b>'):'')+'</div>';
+  if(eq.length) h+='<div style="font-family:Arial;font-size:12px;color:var(--muted);margin-top:3px">Equipo: '+eq.map(m=>'<b style="color:var(--ink)">'+esc(m.nombre)+'</b>'+(m.resp?(' — '+esc(m.resp)):'')).join(' · ')+'</div>';
+  h+='<div style="display:flex;align-items:center;gap:10px;margin-top:6px"><div style="flex:1;max-width:240px;height:9px;border-radius:6px;background:#e9e4d8;overflow:hidden"><i style="display:block;height:100%;width:'+(a.p==null?0:a.p)+'%;background:'+bc+'"></i></div>'+
+     '<span style="font-family:Arial;font-weight:700;font-size:13px;color:'+bc+'">'+(a.p==null?'s/hitos':a.p+'%')+'</span>'+
+     '<span style="font-family:Arial;font-size:12px;color:var(--muted)">'+a.hechos+'/'+a.total+' hitos</span></div>';
+  const hitos=Array.isArray(p.hitos)?p.hitos:[];
+  if(hitos.length){ h+='<div style="margin-top:8px">'; hitos.forEach(ht=>{ h+=gprHitoRow(p,ht,true); }); h+='</div>'; }
+  h+='</div>';
+  return h;
+}
+function viewMisProyectos(){
+  const nombre=SESSION.nombre;
+  if(!STATE.gprProyectos || !STATE.gprProyectos.length){
+    return '<div class="card"><div class="cbody"><div class="empty">No se pudieron cargar los proyectos del Gestor de Proyectos (o no hay ninguno).</div></div></div>';
+  }
+  const mios=STATE.gprProyectos.filter(p=> gprCoincide(gprUserNombre(p.owner_id),nombre) || gprSoyIntegrante(p,nombre));
+  const miosIds=new Set(mios.map(p=>p.id));
+  const part=[];
+  STATE.gprProyectos.forEach(p=>{ if(miosIds.has(p.id)) return; (Array.isArray(p.hitos)?p.hitos:[]).forEach(ht=>{ if(ht.quien && !ht.cancelado && gprCoincide(ht.quien,nombre)) part.push({p,ht}); }); });
+  part.sort((a,b)=>String(a.ht.fecha||'9999').localeCompare(String(b.ht.fecha||'9999')));
+
+  let h='<div class="card"><div class="cbody" style="font-family:Arial;font-size:12.5px;color:var(--muted)">Vista de solo lectura del <b style="color:var(--green)">Gestor de Proyectos</b>. Aquí ves los proyectos bajo tu responsabilidad (dueño o equipo) y los hitos donde participas. Para <b>marcar</b> un hito como hecho se hace desde el Gestor de Proyectos.</div></div>';
+
+  h+='<div class="card"><div class="chead"><div class="t"><small>Responsable (dueño o equipo)</small>Mis proyectos · '+mios.length+'</div></div><div class="cbody">';
+  if(mios.length){ mios.forEach(p=>{ const miRol= gprCoincide(gprUserNombre(p.owner_id),nombre)?'Dueño':'Integrante'; h+=gprProyectoCard(p,miRol); }); }
+  else h+='<div class="empty">No tienes proyectos bajo tu responsabilidad directa.</div>';
+  h+='</div></div>';
+
+  h+='<div class="card"><div class="chead"><div class="t"><small>Participación</small>Hitos donde participo · '+part.length+'</div></div><div class="cbody">';
+  if(part.length){
+    part.forEach(x=>{
+      const cod='PR-'+String(x.p.id).padStart(2,'0');
+      h+='<div style="padding:7px 0;border-top:1px dashed var(--line)"><div style="font-family:Arial;font-size:11px;color:var(--muted)"><span style="font-weight:700;background:var(--accent);color:#fff;padding:1px 7px;border-radius:6px">'+cod+'</span> '+esc(x.p.nombre)+' · Dueño: '+esc(gprUserNombre(x.p.owner_id))+'</div>'+gprHitoRow(x.p,x.ht,false)+'</div>';
+    });
+  } else h+='<div class="empty">No participas en hitos de otros proyectos.</div>';
+  h+='</div></div>';
+  return h;
 }
 
 /* =====================================================================
