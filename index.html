@@ -374,6 +374,9 @@ function bindActions(){
    donde participa (es el "quién"). Solo lectura: marcar se hace en el
    Gestor de Proyectos (el coordinador no es usuario de ese módulo).
    ===================================================================== */
+let mpExpand=new Set();      // proyectos con hitos expandidos
+let mpVerConcluidos=false;   // mostrar proyectos concluidos/cancelados
+let mpVerHechos=false;       // mostrar hitos ya hechos en "Hitos donde participo"
 function gprNorm(s){ return String(s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').trim(); }
 function gprCoincide(texto,nombre){ const t=gprNorm(texto); if(!t) return false; const pn=gprNorm(nombre).split(/\s+/)[0]; if(!pn) return false; return (' '+t+' ').indexOf(' '+pn+' ')>=0; }
 function gprUserNombre(id){ const u=(STATE.gprUsuarios||[]).find(x=>x.id===id); return u?u.nombre:('#'+id); }
@@ -412,7 +415,11 @@ function gprProyectoCard(p,miRol){
      '<span style="font-family:Arial;font-weight:700;font-size:13px;color:'+bc+'">'+(a.p==null?'s/hitos':a.p+'%')+'</span>'+
      '<span style="font-family:Arial;font-size:12px;color:var(--muted)">'+a.hechos+'/'+a.total+' hitos</span></div>';
   const hitos=Array.isArray(p.hitos)?p.hitos:[];
-  if(hitos.length){ h+='<div style="margin-top:8px">'; hitos.forEach(ht=>{ h+=gprHitoRow(p,ht,true); }); h+='</div>'; }
+  const exp=mpExpand.has(p.id);
+  if(hitos.length){
+    h+='<div style="margin-top:8px"><button class="act ghost sm" data-act="mpToggle" data-id="'+p.id+'">'+(exp?'▲ Ocultar hitos':'▼ Ver hitos ('+a.hechos+'/'+a.total+')')+'</button></div>';
+    if(exp){ h+='<div style="margin-top:6px">'; hitos.forEach(ht=>{ h+=gprHitoRow(p,ht,true); }); h+='</div>'; }
+  }
   h+='</div>';
   return h;
 }
@@ -421,26 +428,37 @@ function viewMisProyectos(){
   if(!STATE.gprProyectos || !STATE.gprProyectos.length){
     return '<div class="card"><div class="cbody"><div class="empty">No se pudieron cargar los proyectos del Gestor de Proyectos (o no hay ninguno).</div></div></div>';
   }
-  const mios=STATE.gprProyectos.filter(p=> gprCoincide(gprUserNombre(p.owner_id),nombre) || gprSoyIntegrante(p,nombre));
-  const miosIds=new Set(mios.map(p=>p.id));
+  const esMio=p=>gprCoincide(gprUserNombre(p.owner_id),nombre);
+  const esConcluido=p=>{ const a=gprAvance(p); const st=gprNorm(p.status); return a.p===100 || st.indexOf('termin')>=0 || st.indexOf('complet')>=0 || st.indexOf('cerrad')>=0 || st.indexOf('finaliz')>=0 || st.indexOf('cancel')>=0; };
+  // "Mis proyectos" = SOLO donde soy dueño.
+  const mios=STATE.gprProyectos.filter(esMio);
+  const concluidos=mios.filter(esConcluido).length;
+  const miosShow = mpVerConcluidos ? mios : mios.filter(p=>!esConcluido(p));
+  // "Hitos donde participo" = hitos (yo = quien) en proyectos de OTRO dueño.
   const part=[];
-  STATE.gprProyectos.forEach(p=>{ if(miosIds.has(p.id)) return; (Array.isArray(p.hitos)?p.hitos:[]).forEach(ht=>{ if(ht.quien && !ht.cancelado && gprCoincide(ht.quien,nombre)) part.push({p,ht}); }); });
+  STATE.gprProyectos.forEach(p=>{ if(esMio(p)) return; (Array.isArray(p.hitos)?p.hitos:[]).forEach(ht=>{ if(ht.quien && !ht.cancelado && gprCoincide(ht.quien,nombre)) part.push({p,ht}); }); });
   part.sort((a,b)=>String(a.ht.fecha||'9999').localeCompare(String(b.ht.fecha||'9999')));
+  const partHechos=part.filter(x=>x.ht.hecho).length;
+  const partShow = mpVerHechos ? part : part.filter(x=>!x.ht.hecho);
 
-  let h='<div class="card"><div class="cbody" style="font-family:Arial;font-size:12.5px;color:var(--muted)">Vista de solo lectura del <b style="color:var(--green)">Gestor de Proyectos</b>. Aquí ves los proyectos bajo tu responsabilidad (dueño o equipo) y los hitos donde participas. Para <b>marcar</b> un hito como hecho se hace desde el Gestor de Proyectos.</div></div>';
+  let h='<div class="card"><div class="cbody" style="font-family:Arial;font-size:12.5px;color:var(--muted)">Vista de solo lectura del <b style="color:var(--green)">Gestor de Proyectos</b>: los proyectos donde eres <b>dueño</b> y los hitos donde <b>participas</b> en proyectos de otros. Marcar un hito como hecho se hace desde el Gestor de Proyectos.</div></div>';
 
-  h+='<div class="card"><div class="chead"><div class="t"><small>Responsable (dueño o equipo)</small>Mis proyectos · '+mios.length+'</div></div><div class="cbody">';
-  if(mios.length){ mios.forEach(p=>{ const miRol= gprCoincide(gprUserNombre(p.owner_id),nombre)?'Dueño':'Integrante'; h+=gprProyectoCard(p,miRol); }); }
-  else h+='<div class="empty">No tienes proyectos bajo tu responsabilidad directa.</div>';
+  // --- Mis proyectos (dueño) ---
+  h+='<div class="card"><div class="chead"><div class="t"><small>Soy el dueño</small>Mis proyectos · '+miosShow.length+(concluidos?(' <span style="font-weight:400;color:var(--muted)">de '+mios.length+'</span>'):'')+'</div>'+
+     (concluidos?('<button class="act ghost sm" data-act="mpVerConcl">'+(mpVerConcluidos?'Ocultar concluidos':'Ver concluidos ('+concluidos+')')+'</button>'):'')+'</div><div class="cbody">';
+  if(miosShow.length){ miosShow.forEach(p=>{ h+=gprProyectoCard(p,'Dueño'); }); }
+  else h+='<div class="empty">'+(mios.length?'Todos tus proyectos están concluidos. Usa "Ver concluidos".':'No eres dueño de ningún proyecto.')+'</div>';
   h+='</div></div>';
 
-  h+='<div class="card"><div class="chead"><div class="t"><small>Participación</small>Hitos donde participo · '+part.length+'</div></div><div class="cbody">';
-  if(part.length){
-    part.forEach(x=>{
+  // --- Hitos donde participo ---
+  h+='<div class="card"><div class="chead"><div class="t"><small>Participación (proyectos de otros)</small>Hitos donde participo · '+partShow.length+(partHechos?(' <span style="font-weight:400;color:var(--muted)">'+partHechos+' hechos</span>'):'')+'</div>'+
+     (partHechos?('<button class="act ghost sm" data-act="mpVerHechos">'+(mpVerHechos?'Ocultar hechos':'Ver hechos ('+partHechos+')')+'</button>'):'')+'</div><div class="cbody">';
+  if(partShow.length){
+    partShow.forEach(x=>{
       const cod='PR-'+String(x.p.id).padStart(2,'0');
       h+='<div style="padding:7px 0;border-top:1px dashed var(--line)"><div style="font-family:Arial;font-size:11px;color:var(--muted)"><span style="font-weight:700;background:var(--accent);color:#fff;padding:1px 7px;border-radius:6px">'+cod+'</span> '+esc(x.p.nombre)+' · Dueño: '+esc(gprUserNombre(x.p.owner_id))+'</div>'+gprHitoRow(x.p,x.ht,false)+'</div>';
     });
-  } else h+='<div class="empty">No participas en hitos de otros proyectos.</div>';
+  } else h+='<div class="empty">'+(part.length?'No tienes hitos pendientes aquí. Usa "Ver hechos".':'No participas en hitos de otros proyectos.')+'</div>';
   h+='</div></div>';
   return h;
 }
@@ -1425,6 +1443,11 @@ function chk(id){ const e=document.getElementById(id); return e?e.checked:false;
    ACCIONES (data-act)
    ===================================================================== */
 const ACTIONS={
+  /* ---- MIS PROYECTOS (coordinador) ---- */
+  mpToggle(d){ const id=Number(d.id); if(mpExpand.has(id)) mpExpand.delete(id); else mpExpand.add(id); render(); },
+  mpVerConcl(){ mpVerConcluidos=!mpVerConcluidos; render(); },
+  mpVerHechos(){ mpVerHechos=!mpVerHechos; render(); },
+
   /* ---- VISITAS ---- */
   nuevaVisita(){ visitaModal(null); },
   editVisita(d){ visitaModal(STATE.visitas.find(v=>v.id==d.id)); },
