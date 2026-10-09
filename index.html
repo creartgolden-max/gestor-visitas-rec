@@ -392,11 +392,16 @@ function gprHitoRow(p,ht,resaltar){
     : atras?'<span style="font-family:Arial;font-size:11px;font-weight:700;color:var(--bad)">⚠ atrasado</span>'
     : '<span style="font-family:Arial;font-size:11px;color:var(--accent-deep)">pendiente</span>';
   const mark = cancel?'✕':(ht.hecho?'✓':'·');
+  // Marcable si soy dueño del proyecto o soy el "quién" del hito (el RPC gpr2_marcar_hito lo valida server-side con mi PIN).
+  const marcable = !cancel && (gprCoincide(gprUserNombre(p.owner_id),SESSION.nombre) || (!!ht.quien && gprCoincide(ht.quien,SESSION.nombre)));
+  const marcaCell = marcable
+    ? '<input type="checkbox" style="width:17px;height:17px;accent-color:var(--green);flex:none" data-mph="'+p.id+'|'+esc(ht.id)+'" '+(ht.hecho?'checked':'')+'>'
+    : '<span style="width:16px;text-align:center;color:'+(cancel?'var(--bad)':(ht.hecho?'var(--ok)':'var(--muted)'))+'">'+mark+'</span>';
   const esMio = resaltar && ht.quien && gprCoincide(ht.quien,SESSION.nombre);
   const quien = ht.quien?('<span style="font-family:Arial;font-size:11px;color:'+(esMio?'var(--green)':'var(--muted)')+(esMio?';font-weight:700':'')+'">👤 '+esc(ht.quien)+'</span>'):'';
   const fecha = ht.fecha?('<span style="font-family:Arial;font-size:11px;color:'+(atras?'var(--bad)':'var(--muted)')+'">📅 '+fmtFecha(ht.fecha)+'</span>'):'';
   return '<div style="display:flex;align-items:center;gap:8px;padding:4px 0;flex-wrap:wrap;border-top:1px dashed var(--line)">'+
-    '<span style="width:16px;text-align:center;color:'+(cancel?'var(--bad)':(ht.hecho?'var(--ok)':'var(--muted)'))+'">'+mark+'</span>'+
+    marcaCell+
     '<span style="flex:1;min-width:140px;font-family:Arial;font-size:13px'+((ht.hecho||cancel)?';text-decoration:line-through;color:var(--muted)':'')+'">'+esc(ht.texto||'')+'</span>'+
     fecha+quien+estado+'</div>';
 }
@@ -441,7 +446,7 @@ function viewMisProyectos(){
   const partHechos=part.filter(x=>x.ht.hecho).length;
   const partShow = mpVerHechos ? part : part.filter(x=>!x.ht.hecho);
 
-  let h='<div class="card"><div class="cbody" style="font-family:Arial;font-size:12.5px;color:var(--muted)">Vista de solo lectura del <b style="color:var(--green)">Gestor de Proyectos</b>: los proyectos donde eres <b>dueño</b> y los hitos donde <b>participas</b> en proyectos de otros. Marcar un hito como hecho se hace desde el Gestor de Proyectos.</div></div>';
+  let h='<div class="card"><div class="cbody" style="font-family:Arial;font-size:12.5px;color:var(--muted)">Tus proyectos del <b style="color:var(--green)">Gestor de Proyectos</b>: donde eres <b>dueño</b> y los hitos donde <b>participas</b> en proyectos de otros. Puedes <b>marcar</b> aquí los hitos que son tuyos o de tus proyectos (se guarda en el Gestor de Proyectos).</div></div>';
 
   // --- Mis proyectos (dueño) ---
   h+='<div class="card"><div class="chead"><div class="t"><small>Soy el dueño</small>Mis proyectos · '+miosShow.length+(concluidos?(' <span style="font-weight:400;color:var(--muted)">de '+mios.length+'</span>'):'')+'</div>'+
@@ -461,6 +466,21 @@ function viewMisProyectos(){
   } else h+='<div class="empty">'+(part.length?'No tienes hitos pendientes aquí. Usa "Ver hechos".':'No participas en hitos de otros proyectos.')+'</div>';
   h+='</div></div>';
   return h;
+}
+viewMisProyectos._after=function(){
+  document.querySelectorAll('[data-mph]').forEach(el=>{
+    if(el._bound) return; el._bound=true;
+    el.addEventListener('change',e=>{ const pr=e.target.dataset.mph.split('|'); marcarHitoProyecto(Number(pr[0]),pr[1],e.target.checked); });
+  });
+};
+async function marcarHitoProyecto(projId,hitoId,hecho){
+  try{
+    const r=await db.rpc('gpr2_marcar_hito',{p_pin:SESSION.pin,p_proyecto_id:projId,p_hito_id:hitoId,p_hecho:hecho});
+    if(r.error) throw r.error;
+    const gpr=await db.from('gpr2_proyectos').select('id,nombre,owner_id,status,inicio,termino,integrantes,hitos,proceso_id');
+    if(!gpr.error) STATE.gprProyectos=gpr.data||[];
+    render(); toast(hecho?'Hito marcado ✓':'Hito desmarcado','ok');
+  }catch(err){ console.error(err); toast('No se pudo: '+(err.message||err),'err'); render(); }
 }
 
 /* =====================================================================
